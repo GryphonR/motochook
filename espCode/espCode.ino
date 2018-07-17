@@ -24,9 +24,9 @@
 #include <ESP8266_SSD1322.h>
 
 //ESP8266 Pins
-#define OLED_CS     15  // Pin 19, CS - Chip select
-#define OLED_DC     2   // Pin 20 - DC digital signal
-#define OLED_RESET  16  // Pin 15 -RESET digital signal
+#define OLED_CS     15  // D8, CS - Chip select
+#define OLED_DC     2   // D4 - DC digital signal
+#define OLED_RESET  16  // D0 -RESET digital signal
 
 //hardware SPI - only way to go. Can get 110 FPS
 ESP8266_SSD1322 display(OLED_DC, OLED_RESET, OLED_CS);
@@ -61,10 +61,12 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
 #endif
 
 //SD Card Variables
-const int chipSelect = 3; // Can't be 4 - that's the display CS!
+const int chipSelect = 0; // D3
 int cardWorking = 0;
 
 void setup()   {
+        pinMode(OLED_CS, OUTPUT);
+        pinMode(chipSelect, OUTPUT);
         Serial.begin(9600);
         displaySetup();
         sdSetup();
@@ -77,6 +79,7 @@ void loop() {
 }
 
 void sdSetup(){
+        digitalWrite(OLED_CS, LOW);
         Serial.print("Initializing SD card...");
 
         // see if the card is present and can be initialized:
@@ -85,9 +88,8 @@ void sdSetup(){
                 cardWorking = 0;
                 // TODO Write error to display
                 return;
-        }else{
-                cardWorking = 1;
         }
+        cardWorking = 1;
         Serial.println("card initialized.");
 }
 
