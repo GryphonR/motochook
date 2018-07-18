@@ -61,12 +61,12 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
 #endif
 
 //SD Card Variables
-const int chipSelect = 0; // D3
+const int SD_CS = 0; // D3
 int cardWorking = 0;
 
 void setup()   {
         pinMode(OLED_CS, OUTPUT);
-        pinMode(chipSelect, OUTPUT);
+        pinMode(SD_CS, OUTPUT);
         Serial.begin(9600);
         displaySetup();
         sdSetup();
@@ -79,11 +79,15 @@ void loop() {
 }
 
 void sdSetup(){
-        digitalWrite(OLED_CS, LOW);
+        // digitalWrite(OLED_CS, HIGH);
+        digitalWrite(SD_CS, HIGH);
         Serial.print("Initializing SD card...");
 
+        int sdInit = SD.begin(SD_CS, SPI_HALF_SPEED);
         // see if the card is present and can be initialized:
-        if (!SD.begin(chipSelect)) {
+        if (sdInit != 111) {
+                Serial.print("SD INIT = ");
+                Serial.println(sdInit);
                 Serial.println("Card failed, or not present");
                 cardWorking = 0;
                 // TODO Write error to display
