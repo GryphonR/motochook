@@ -9,6 +9,8 @@ A2 - Oil Pressure
 
 A3 - TPS
 
+A5 - Oil Temp
+
 A7 - Lambda
 
 D2 - Engine RPM
