@@ -75,17 +75,43 @@ struct data {
         int motorRPM = 0;
 };
 
+long loopTimer = 0;
+int halfLoopTime = 50;
+int loopCount = 0;
+
 void setup()   {
         pinMode(OLED_CS, OUTPUT);
         pinMode(SD_CS, OUTPUT);
         Serial.begin(9600);
         displaySetup();
         sdSetup();
+        loopTimer = millis();
 
 }
 
 
 void loop() {
+
+receiveSerial();
+
+  if(millis() - loopTimer >= halfLoopTime){
+    // triggers at 20Hz and runs display and data logging alternately to better divide CPU time
+    if(loopCount == 0){ //Do display things
+      loopCount = 1;
+      updateDisplay();
+    }else{ // Do logging things
+      loopCount = 0;
+      writeToSD();
+    }
+  }
+}
+
+void updateDisplay(){
+  //Updates display with  latest data available
+}
+
+void writeToSD(){
+
 
 }
 
@@ -179,26 +205,15 @@ void assignValue(char id, float val){
 void displaySetup(){
         // Initialize and perform reset
         display.begin(true);
-        // init done
-
-        // Show image buffer on the display hardware.
-        // Since the buffer is intialized with an Adafruit splashscreen
-        // internally, this will display the splashscreen.
-        // TODO Splashscreen here
-        // display.display();
 
         // Clear the buffer.
         display.clearDisplay();
 
         display.setTextColor(WHITE);
-
-
-        display.drawRightString("Size 2",0,0,2);
-        display.drawRightString("Size 4",0,10,4);
-        display.drawRightString("Size 6",0,20,6);
+        display.drawRightString("PARKES",20,20,4);
 
         display.display();
-        delay(2000);
+        delay(500);
 }
 
 
