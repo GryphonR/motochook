@@ -67,20 +67,12 @@ int cardWorking = 0;
 //Serial Variables
 char inBuff[5] = {};
 struct data {
-        float vTot = 0;
-        float vHigh = 0;
-        float vLow = 0;
-        float current = 0;
-        float tempOne = 0;
-        float tempTwo = 0;
-        int rpm = 0;
-        int throttle = 0;
-        int brake = 0;
-        float speed = 0;
-        float distance = 0;
-        float gearRatio = 0;
-
-
+        float coolantTemp = 0;
+        float tps = 0;
+        float lambda = 0;
+        float oilPressure = 0;
+        float oilTemp = 0;
+        int motorRPM = 0;
 };
 
 void setup()   {
@@ -159,36 +151,23 @@ float dataDecode(char b1, char b2){
 
 void assignValue(char id, float val){
         switch (id) {
-        case 's':
-                data.speed = val;
-                break;
-        case 'm':
-                data.rpm = val;
-                break;
-        case 'i':
-                data.current = val;
-                break;
         case 'v':
-                data.vTot = val;
-                break;
-        case 'w':
-                data.vLow = val;
-                data.vHigh = data.vTot-val;
+                data.coolantTemp = val;
                 break;
         case 't':
-                data.throttle = val;
+                data.tps = val;
                 break;
-        case 'a':
-                data.tempOne = val;
+        case 'w':
+                data.lambda = val;
                 break;
-        case 'b':
-                data.tempTwo = val;
+        case 'i':
+                data.oilPressure = val;
                 break;
-        case 'r':
-                data.gearRatio = val;
+        case 'm':
+                data.motorRPM = val;
                 break;
-        case 'B':
-                data.brake = val;
+        case 'o':
+                data.oilTemp = val;
                 break;
         default:
                 break;
