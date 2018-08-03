@@ -66,39 +66,50 @@ int cardWorking = 0;
 
 //Serial Variables
 char inBuff[5] = {};
-struct data {
+struct Data {
         float coolantTemp = 0;
         float tps = 0;
         float lambda = 0;
         float oilPressure = 0;
         float oilTemp = 0;
         int motorRPM = 0;
-};
+} data;
 
 long loopTimer = 0;
 int halfLoopTime = 50;
 int loopCount = 0;
+long updateTimer = 0;
+int updateCount = 0;
 
 void setup()   {
         pinMode(OLED_CS, OUTPUT);
         pinMode(SD_CS, OUTPUT);
+        pinMode(14, OUTPUT);
+        pinMode(13, OUTPUT);
+        pinMode(16, OUTPUT);
+        pinMode(12, INPUT);
         Serial.begin(9600);
+        Serial.println("Serial Initialised");
         displaySetup();
-        sdSetup();
+      //  sdSetup();
         loopTimer = millis();
+        updateTimer = millis();
 
 }
 
 
 void loop() {
 
-receiveSerial();
+receiveSerial(); //check for new data every loop
 
   if(millis() - loopTimer >= halfLoopTime){
-    // triggers at 20Hz and runs display and data logging alternately to better divide CPU time
+    loopTimer = millis();
+    // triggers at double speed and runs display and data logging alternately to better divide CPU time
     if(loopCount == 0){ //Do display things
       loopCount = 1;
+      updateCount += 1;
       updateDisplay();
+      generateData();
     }else{ // Do logging things
       loopCount = 0;
       writeToSD();
@@ -106,8 +117,39 @@ receiveSerial();
   }
 }
 
+void generateData(){
+  if(data.motorRPM < 14000){
+    data.motorRPM += 100;
+  }else{
+    data.motorRPM = 0;
+  }
+}
+
 void updateDisplay(){
-  //Updates display with  latest data available
+  //Updates display with  latest data availa ble
+  display.clearDisplay(); // inneficient - if this takes too much time we need to send differences, rather than clear and send whole display.
+
+  //RPM
+  char buff[5];
+  // display.drawRect(2,7,128, 32, 0xFFFF);
+  display.setTextColor(WHITE);
+  sprintf(buff, "%4i", data.motorRPM);
+  display.drawRightString(buff,2,7,6);
+  //LAMBDA
+  sprintf(buff, "%.2f",data.lambda);
+  display.drawRightString(buff, 220, 7, 6);
+  // // Coolant temp
+  sprintf(buff, "%.2f",data.coolantTemp);
+  display.drawRightString("CT: ", 2, 45, 1);
+  display.drawRightString(buff, 90, 45, 4);
+  // // Oil Pressure
+  // display.drawRightString("OP: "+ String(data.oilPressure,1)+"PSI", 100, 45, 4);
+  // // Oil Temp
+  // display.drawRightString("OT: "+ String(data.oilTemp,1)+"c", 150, 45, 4);
+
+  // long dispTime = millis();
+  display.display();
+  // data.motorRPM = millis() - dispTime;
 }
 
 void writeToSD(){
@@ -120,17 +162,21 @@ void sdSetup(){
         Serial.print("Initializing SD card...");
 
         // This is for a non standard version of the library.
-        int sdInit = SD.begin(SD_CS, SPI_HALF_SPEED);
-        // see if the card is present and can be initialized:
-        if (sdInit != 111) {
-                Serial.print("SD INIT = ");
-                Serial.println(sdInit);
-                Serial.println("Card failed, or not present");
-                cardWorking = 0;
-                // TODO Write error to display
-                return;
+        // int sdInit = SD.begin(SD_CS, SPI_HALF_SPEED);
+        // // see if the card is present and can be initialized:
+        // if (sdInit != 111) {
+        //         Serial.print("SD INIT = ");
+        //         Serial.println(sdInit);
+        //         Serial.println("Card failed, or not present");
+        //         cardWorking = 0;
+        //         // TODO Write error to display
+        //         return;
+        // }
+        // cardWorking = 1;
+        if(!SD.begin(SD_CS, SPI_HALF_SPEED)){
+           Serial.println("Card failed, or not present");
+           return;
         }
-        cardWorking = 1;
         Serial.println("card initialized.");
 }
 
@@ -139,7 +185,7 @@ void receiveSerial(){
                 buffPush(Serial.read());
                 if(inBuff[4] == '}') { // Latest char is the end of a packet
                         if(inBuff[0] =='{') { // First char of packet is in expected location - we should have data between them
-                                float value = dataDecode(inbuff[2],inbuff[3]);
+                                float value = dataDecode(inBuff[2],inBuff[3]);
                                 assignValue(inBuff[1], value);
                         }
                 }
@@ -153,14 +199,14 @@ void buffPush(char in){
                 inBuff[i] = inBuff[i+1];
         }
         //Add new value to end
-        inBuff[inBuff .4] = in;
+        inBuff[4] = in;
 }
 
 float dataDecode(char b1, char b2){
         float val = 0;
         //First calculate the value in b1 and b2
         //Check for 0
-        if( b1 == 0xFF && b2 = 0xFF) {
+        if( b1 == 0xFF && b2 == 0xFF) {
                 val = 0;
         } else if (b1 && 0x10000000) { // check flag for integer
                 val = ((int)b1 - 128)*100 + (int)b2;
@@ -206,6 +252,9 @@ void displaySetup(){
         // Initialize and perform reset
         display.begin(true);
 
+        Serial.println("Initialising Display");
+
+
         // Clear the buffer.
         display.clearDisplay();
 
@@ -214,6 +263,7 @@ void displaySetup(){
 
         display.display();
         delay(500);
+        display.clearDisplay();
 }
 
 

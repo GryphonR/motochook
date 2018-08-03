@@ -163,7 +163,7 @@ void loop()
   // time to calculate than most, so this is also checked every 1s.
 
 
-  if (millis() - lastShortDataSendTime > SHORT_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
+  if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
   {
     lastShortDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
     loopCounter = loopCounter + 1; // This value will loop 1-4, the 1s update variables will update on certain loops to spread the processing time.
