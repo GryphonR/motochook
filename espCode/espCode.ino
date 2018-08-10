@@ -61,7 +61,7 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
 #endif
 
 //SD Card Variables
-const int SD_CS = 3; // D3
+#define SD_CS 0 // D3
 int cardWorking = 0;
 
 //Serial Variables
@@ -73,6 +73,7 @@ struct Data {
         float oilPressure = 0;
         float oilTemp = 0;
         int motorRPM = 0;
+        long lastUpdated = 0;
 } data;
 
 long loopTimer = 0;
@@ -80,6 +81,8 @@ int halfLoopTime = 50;
 int loopCount = 0;
 long updateTimer = 0;
 int updateCount = 0;
+int sdFound = 0;
+File dataFile;
 
 void setup()   {
         pinMode(OLED_CS, OUTPUT);
@@ -90,8 +93,8 @@ void setup()   {
         pinMode(12, INPUT);
         Serial.begin(9600);
         Serial.println("Serial Initialised");
+        sdSetup();
         displaySetup();
-      //  sdSetup();
         loopTimer = millis();
         updateTimer = millis();
 
@@ -138,14 +141,14 @@ void updateDisplay(){
   //LAMBDA
   sprintf(buff, "%.2f",data.lambda);
   display.drawRightString(buff, 220, 7, 6);
-  // // Coolant temp
+  // Coolant temp
   sprintf(buff, "%.2f",data.coolantTemp);
   display.drawRightString("CT: ", 2, 45, 1);
   display.drawRightString(buff, 90, 45, 4);
-  // // Oil Pressure
-  // display.drawRightString("OP: "+ String(data.oilPressure,1)+"PSI", 100, 45, 4);
-  // // Oil Temp
-  // display.drawRightString("OT: "+ String(data.oilTemp,1)+"c", 150, 45, 4);
+  // Oil Pressure
+  display.drawRightString("OP: "+ String(data.oilPressure,1)+"PSI", 100, 45, 4);
+  // Oil Temp
+  display.drawRightString("OT: "+ String(data.oilTemp,1)+"c", 150, 45, 4);
 
   // long dispTime = millis();
   display.display();
@@ -153,31 +156,48 @@ void updateDisplay(){
 }
 
 void writeToSD(){
+  if(sdFound){
+    long sdTime = millis();
+    dataFile = SD.open("log.csv", FILE_WRITE);
+    if(dataFile){
+        String stringBuff = String(millis()) +","+ String(data.motorRPM) +","+String(data.lambda)+","+String(data.tps)+","+String(data.coolantTemp)+","+String(data.oilTemp)+","+String(data.oilPressure);
+        dataFile.println(stringBuff);
+        Serial.print("SD Write Time: ");
+        Serial.println(millis() - sdTime);
+    }else{
+        Serial.println("Failed to open log.csv");
+        sdFound = 0;
+    }
 
+    dataFile.close();
+  }
 
 }
 
 void sdSetup(){
-        digitalWrite(SD_CS, HIGH);
-        Serial.print("Initializing SD card...");
+        // For SD Init to work on ESP8266 it is necesary to modify line 286 of
+        // Sd2Card.cpp to settings = SPISettings(sckRateID, MSBFIRST, SPI_MODE0);
 
-        // This is for a non standard version of the library.
-        // int sdInit = SD.begin(SD_CS, SPI_HALF_SPEED);
-        // // see if the card is present and can be initialized:
-        // if (sdInit != 111) {
-        //         Serial.print("SD INIT = ");
-        //         Serial.println(sdInit);
-        //         Serial.println("Card failed, or not present");
-        //         cardWorking = 0;
-        //         // TODO Write error to display
-        //         return;
-        // }
-        // cardWorking = 1;
-        if(!SD.begin(SD_CS, SPI_HALF_SPEED)){
-           Serial.println("Card failed, or not present");
+        Serial.println("Initializing SD card...");
+
+        if(!SD.begin(SD_CS, SPI_FULL_SPEED)){
+           Serial.println("SD.Begin failed");
+           // Serial.println(SD.errorCode());
            return;
         }
         Serial.println("card initialized.");
+        if(SD.exists("log.csv")){
+          Serial.println("Logfile Found");
+        }else{
+          Serial.println("No Logfile found... Creating one");
+          dataFile = SD.open("log.csv", FILE_WRITE);
+          if(dataFile){
+            Serial.println("Logfile Created");
+            dataFile.println("Timestamp,RPM,Lambda,TPS,Coolant Temp,Oil Temp, Oil Pressure");
+          }
+          dataFile.close();
+        }
+        sdFound = 1;
 }
 
 void receiveSerial(){
@@ -187,6 +207,7 @@ void receiveSerial(){
                         if(inBuff[0] =='{') { // First char of packet is in expected location - we should have data between them
                                 float value = dataDecode(inBuff[2],inBuff[3]);
                                 assignValue(inBuff[1], value);
+                                data.lastUpdated = millis();
                         }
                 }
         }
