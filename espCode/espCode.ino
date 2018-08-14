@@ -146,9 +146,9 @@ void updateDisplay(){
   display.drawRightString("CT: ", 2, 45, 1);
   display.drawRightString(buff, 90, 45, 4);
   // Oil Pressure
-  display.drawRightString("OP: "+ String(data.oilPressure,1)+"PSI", 100, 45, 4);
+  // display.drawRightString("OP: "+ String(data.oilPressure,1)+"PSI", 100, 45, 4);
   // Oil Temp
-  display.drawRightString("OT: "+ String(data.oilTemp,1)+"c", 150, 45, 4);
+  // display.drawRightString("OT: "+ String(data.oilTemp,1)+"c", 150, 45, 4);
 
   // long dispTime = millis();
   display.display();
