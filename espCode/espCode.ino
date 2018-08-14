@@ -20,7 +20,7 @@
 
 #include <SPI.h>
 #include <SD.h>
-#include <Adafruit_GFX.h>
+// #include <Adafruit_GFX.h>
 #include <ESP8266_SSD1322.h>
 
 //ESP8266 Pins
@@ -63,6 +63,7 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
 //SD Card Variables
 #define SD_CS 0 // D3
 int cardWorking = 0;
+int loggingEnabled = 1;
 
 //Serial Variables
 char inBuff[5] = {};
@@ -103,74 +104,174 @@ void setup()   {
 
 void loop() {
 
-receiveSerial(); //check for new data every loop
+        receiveSerial(); //check for new data every loop
 
-  if(millis() - loopTimer >= halfLoopTime){
-    loopTimer = millis();
-    // triggers at double speed and runs display and data logging alternately to better divide CPU time
-    if(loopCount == 0){ //Do display things
-      loopCount = 1;
-      updateCount += 1;
-      updateDisplay();
-      generateData();
-    }else{ // Do logging things
-      loopCount = 0;
-      writeToSD();
-    }
-  }
+        if(millis() - loopTimer >= halfLoopTime) {
+                loopTimer = millis();
+                // triggers at double speed and runs display and data logging alternately to better divide CPU time
+                if(loopCount == 0) { //Do display things
+                        loopCount = 1;
+                        updateCount += 1;
+                        updateDisplay();
+                        generateData();
+                }else{ // Do logging things
+                        loopCount = 0;
+                        // writeToSD();
+                }
+        }
 }
 
 void generateData(){
-  if(data.motorRPM < 14000){
-    data.motorRPM += 100;
-  }else{
-    data.motorRPM = 0;
-  }
+        if(data.motorRPM < 14000) {
+                data.motorRPM += 100;
+        }else{
+                data.motorRPM = 0;
+        }
+
+        if(data.lambda < 18) {
+                data.lambda += 0.5;
+        }else{
+                data.lambda = 10;
+        }
+
+        data.coolantTemp = 100.12;
+        data.oilTemp = 100.21;
+        data.oilPressure = 120;
 }
 
 void updateDisplay(){
-  //Updates display with  latest data availa ble
-  display.clearDisplay(); // inneficient - if this takes too much time we need to send differences, rather than clear and send whole display.
+        //Updates display with  latest data availa ble
+        display.clearDisplay(); // inneficient - if this takes too much time we need to send differences, rather than clear and send whole display.
 
-  //RPM
-  char buff[5];
-  // display.drawRect(2,7,128, 32, 0xFFFF);
-  display.setTextColor(WHITE);
-  sprintf(buff, "%4i", data.motorRPM);
-  display.drawRightString(buff,2,7,6);
-  //LAMBDA
-  sprintf(buff, "%.2f",data.lambda);
-  display.drawRightString(buff, 220, 7, 6);
-  // Coolant temp
-  sprintf(buff, "%.2f",data.coolantTemp);
-  display.drawRightString("CT: ", 2, 45, 1);
-  display.drawRightString(buff, 90, 45, 4);
-  // Oil Pressure
-  // display.drawRightString("OP: "+ String(data.oilPressure,1)+"PSI", 100, 45, 4);
-  // Oil Temp
-  // display.drawRightString("OT: "+ String(data.oilTemp,1)+"c", 150, 45, 4);
+        //RPM
+        char buff[10];
+        // display.drawRect(2,7,128, 32, 0xFFFF);
+        display.setTextColor(WHITE);
+        int rpmTop = data.motorRPM/1000;
+        int rpmBottom = data.motorRPM - rpmTop*1000;
 
-  // long dispTime = millis();
-  display.display();
-  // data.motorRPM = millis() - dispTime;
+        sprintf(buff, "%2i", rpmTop);
+        display.drawRightString(buff,45,7,6);
+        sprintf(buff, "%03i", rpmBottom);
+        display.drawRightString(buff,95,7,4);
+        display.drawRightString("RPM",95,27,2);
+
+
+        // sprintf(buff, "%i", data.motorRPM);
+        // display.drawRightString(buff,135,7,6);
+        //LAMBDA
+        sprintf(buff, "%.2f",data.lambda);
+        display.drawRightString(buff, 250, 7, 6);
+        // Coolant temp
+        sprintf(buff, "%3.2f",data.coolantTemp);
+        display.drawCentreString("CT:", 2, 45, 2);
+        display.drawRightString(buff, 65, 45, 2);
+        // Oil Pressure
+        sprintf(buff, "%3.2f",data.oilPressure);
+        display.drawRightString("OP:", 90, 45, 2);
+        display.drawRightString(buff, 136, 45, 2);
+        // Oil Temp
+        sprintf(buff, "%3.2f",data.oilTemp);
+        display.drawRightString("OT:", 161, 45, 2);
+        display.drawRightString(buff, 207, 45, 2);
+
+        //Bars
+        float rpmEnd = 0.0182 * data.motorRPM; // 256/maxRPM i.e 14000
+        display.fillRect(0, 0, (int)rpmEnd, 5, WHITE);
+
+        //1000 rpm
+        int breaks = 0.0182*1000;
+
+        for(int i = breaks; i < rpmEnd; i+=breaks)
+        {
+                display.drawLine(i, 0, i, 5, BLACK);
+        }
+
+        //Lambda x100 for resolution
+        int lambda = ((float)data.lambda-10)*100;
+        int midPoint = 390;
+        int midPointPix = 0.32 * midPoint;
+        int readingPix = 0.32 * lambda;
+
+        if(readingPix < midPointPix) {
+                display.fillRect(readingPix, 60,midPointPix-readingPix, 63, WHITE);
+                for(int i = 0; i < midPointPix; i+= 32) {
+                        if(i>readingPix)
+                                display.drawLine(i, 60, i, 63, BLACK);
+                }
+        }else{
+                display.fillRect(midPointPix, 60, readingPix-midPointPix, 63, WHITE);
+                for(int i = 256; i > midPointPix; i-= 32) {
+                        if(i<readingPix)
+                                display.drawLine(i, 60, i, 63, BLACK);
+                }
+        }
+
+        if(loggingEnabled) {
+                if(cardWorking) {
+                        display.drawRightString("LOG", 250, 45, 2);
+                }else{
+                        display.drawRightString("ERR", 250, 45, 2);
+                }
+        }else{
+                display.drawRightString("OFF", 250, 45, 2);
+        }
+
+
+        // Lines...
+        // for(int i = 20; i < 256; i+=20)
+        // {
+        //         display.drawLine(i, 0, i, display.height()-1, WHITE);
+        // }
+
+
+        // long dispTime = millis();
+        display.display();
+        // data.motorRPM = millis() - dispTime;
 }
+// void updateDisplay(){
+//         //Updates display with  latest data availa ble
+//         display.clearDisplay(); // inneficient - if this takes too much time we need to send differences, rather than clear and send whole display.
+//
+//         //RPM
+//         char buff[10];
+//         // display.drawRect(2,7,128, 32, 0xFFFF);
+//         display.setTextColor(WHITE);
+//         sprintf(buff, "%5i", data.motorRPM);
+//         display.drawString(buff,2,7,6);
+//         //LAMBDA
+//         sprintf(buff, "%.2f",data.lambda);
+//         display.drawRightString(buff, 220, 7, 6);
+//         // Coolant temp
+//         sprintf(buff, "%.2f",data.coolantTemp);
+//         display.drawRightString("CT: ", 2, 45, 2);
+//         display.drawRightString(buff, 90, 45, 4);
+//         // Oil Pressure
+//         // display.drawRightString("OP: "+ String(data.oilPressure,1)+"PSI", 100, 45, 4);
+//         // Oil Temp
+//         // display.drawRightString("OT: "+ String(data.oilTemp,1)+"c", 150, 45, 4);
+//
+//         // long dispTime = millis();
+//         display.display();
+//         // data.motorRPM = millis() - dispTime;
+// }
 
 void writeToSD(){
-  if(sdFound){
-    long sdTime = millis();
-    dataFile = SD.open("log.csv", FILE_WRITE);
-    if(dataFile){
-        String stringBuff = String(millis()) +","+ String(data.motorRPM) +","+String(data.lambda)+","+String(data.tps)+","+String(data.coolantTemp)+","+String(data.oilTemp)+","+String(data.oilPressure);
-        dataFile.println(stringBuff);
-        Serial.print("SD Write Time: ");
-        Serial.println(millis() - sdTime);
-    }else{
-        Serial.println("Failed to open log.csv");
-        sdFound = 0;
-    }
+        if(sdFound) {
+                long sdTime = millis();
+                dataFile = SD.open("log.csv", FILE_WRITE);
+                if(dataFile) {
+                        String stringBuff = String(millis()) +","+ String(data.motorRPM) +","+String(data.lambda)+","+String(data.tps)+","+String(data.coolantTemp)+","+String(data.oilTemp)+","+String(data.oilPressure);
+                        dataFile.println(stringBuff);
+                        Serial.print("SD Write Time: ");
+                        Serial.println(millis() - sdTime);
+                }else{
+                        Serial.println("Failed to open log.csv");
+                        sdFound = 0;
+                }
 
-    dataFile.close();
-  }
+                dataFile.close();
+        }
 
 }
 
@@ -180,22 +281,22 @@ void sdSetup(){
 
         Serial.println("Initializing SD card...");
 
-        if(!SD.begin(SD_CS, SPI_FULL_SPEED)){
-           Serial.println("SD.Begin failed");
-           // Serial.println(SD.errorCode());
-           return;
+        if(!SD.begin(SD_CS, SPI_FULL_SPEED)) {
+                Serial.println("SD.Begin failed");
+                // Serial.println(SD.errorCode());
+                return;
         }
         Serial.println("card initialized.");
-        if(SD.exists("log.csv")){
-          Serial.println("Logfile Found");
+        if(SD.exists("log.csv")) {
+                Serial.println("Logfile Found");
         }else{
-          Serial.println("No Logfile found... Creating one");
-          dataFile = SD.open("log.csv", FILE_WRITE);
-          if(dataFile){
-            Serial.println("Logfile Created");
-            dataFile.println("Timestamp,RPM,Lambda,TPS,Coolant Temp,Oil Temp, Oil Pressure");
-          }
-          dataFile.close();
+                Serial.println("No Logfile found... Creating one");
+                dataFile = SD.open("log.csv", FILE_WRITE);
+                if(dataFile) {
+                        Serial.println("Logfile Created");
+                        dataFile.println("Timestamp,RPM,Lambda,TPS,Coolant Temp,Oil Temp, Oil Pressure");
+                }
+                dataFile.close();
         }
         sdFound = 1;
 }
@@ -285,95 +386,4 @@ void displaySetup(){
         display.display();
         delay(500);
         display.clearDisplay();
-}
-
-
-void testdrawchar(void) {
-        display.setTextSize(1);
-        display.setTextColor(WHITE);
-        display.setCursor(0,0);
-
-        for (uint8_t i=0; i < 168; i++) {
-                if (i == '\n') continue;
-                display.write(i);
-                if ((i > 0) && (i % 21 == 0))
-                        display.println();
-        }
-        display.display();
-}
-
-
-void testdrawrect(void) {
-        for (int16_t i=0; i<display.height()/2; i+=2) {
-                display.drawRect(i, i, display.width()-2*i, display.height()-2*i, WHITE);
-                display.display();
-        }
-}
-
-void testdrawline() {
-        for (int16_t i=0; i<display.width(); i+=4) {
-                display.drawLine(0, 0, i, display.height()-1, WHITE);
-                display.display();
-        }
-        for (int16_t i=0; i<display.height(); i+=4) {
-                display.drawLine(0, 0, display.width()-1, i, WHITE);
-                display.display();
-        }
-        delay(250);
-
-        display.clearDisplay();
-        for (int16_t i=0; i<display.width(); i+=4) {
-                display.drawLine(0, display.height()-1, i, 0, WHITE);
-                display.display();
-        }
-        for (int16_t i=display.height()-1; i>=0; i-=4) {
-                display.drawLine(0, display.height()-1, display.width()-1, i, WHITE);
-                display.display();
-        }
-        delay(250);
-
-        display.clearDisplay();
-        for (int16_t i=display.width()-1; i>=0; i-=4) {
-                display.drawLine(display.width()-1, display.height()-1, i, 0, WHITE);
-                display.display();
-        }
-        for (int16_t i=display.height()-1; i>=0; i-=4) {
-                display.drawLine(display.width()-1, display.height()-1, 0, i, WHITE);
-                display.display();
-        }
-        delay(250);
-
-        display.clearDisplay();
-        for (int16_t i=0; i<display.height(); i+=4) {
-                display.drawLine(display.width()-1, 0, 0, i, WHITE);
-                display.display();
-        }
-        for (int16_t i=0; i<display.width(); i+=4) {
-                display.drawLine(display.width()-1, 0, i, display.height()-1, WHITE);
-                display.display();
-        }
-        delay(250);
-}
-
-void testscrolltext(void) {
-        display.setTextSize(2);
-        display.setTextColor(WHITE);
-        display.setCursor(10,0);
-        display.clearDisplay();
-        display.println("scroll");
-        display.display();
-
-        display.startscrollright(0x00, 0x0F);
-        delay(2000);
-        display.stopscroll();
-        delay(1000);
-        display.startscrollleft(0x00, 0x0F);
-        delay(2000);
-        display.stopscroll();
-        delay(1000);
-        display.startscrolldiagright(0x00, 0x07);
-        delay(2000);
-        display.startscrolldiagleft(0x00, 0x07);
-        delay(2000);
-        display.stopscroll();
 }
