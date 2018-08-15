@@ -20,8 +20,8 @@
 
 #include <SPI.h>
 #include <SD.h>
-// #include <Adafruit_GFX.h>
 #include <ESP8266_SSD1322.h>
+#include <Bounce2.h>
 
 //ESP8266 Pins
 #define OLED_CS     15  // D8, CS - Chip select
@@ -31,39 +31,17 @@
 //hardware SPI - only way to go. Can get 110 FPS
 ESP8266_SSD1322 display(OLED_DC, OLED_RESET, OLED_CS);
 
-#define NUMFLAKES 10
-#define XPOS 0
-#define YPOS 1
-#define DELTAY 2
-
-#define LOGO16_GLCD_HEIGHT 16
-#define LOGO16_GLCD_WIDTH  16
-static const unsigned char PROGMEM logo16_glcd_bmp[] =
-{ B00000000, B11000000,
-  B00000001, B11000000,
-  B00000001, B11000000,
-  B00000011, B11100000,
-  B11110011, B11100000,
-  B11111110, B11111000,
-  B01111110, B11111111,
-  B00110011, B10011111,
-  B00011111, B11111100,
-  B00001101, B01110000,
-  B00011011, B10100000,
-  B00111111, B11100000,
-  B00111111, B11110000,
-  B01111100, B11110000,
-  B01110000, B01110000,
-  B00000000, B00110000 };
-
 #if (SSD1322_LCDHEIGHT != 64)
 #error ("Height incorrect, please fix ESP8266_SSD1322.h!");
 #endif
 
+#define BUTTON_PIN 4 //GPIO 4 D2
+Bounce debouncer = Bounce();
+int lastButtonState = 1;
 //SD Card Variables
 #define SD_CS 0 // D3
 int cardWorking = 0;
-int loggingEnabled = 1;
+int loggingEnabled = 0;
 
 //Serial Variables
 char inBuff[5] = {};
@@ -86,6 +64,10 @@ int sdFound = 0;
 File dataFile;
 
 void setup()   {
+        pinMode(BUTTON_PIN,INPUT_PULLUP);
+        debouncer.attach(BUTTON_PIN);
+        debouncer.interval(5); // interval in ms
+
         pinMode(OLED_CS, OUTPUT);
         pinMode(SD_CS, OUTPUT);
         pinMode(14, OUTPUT);
@@ -106,6 +88,18 @@ void loop() {
 
         receiveSerial(); //check for new data every loop
 
+        debouncer.update();
+        int tempState = debouncer.read();
+        if(tempState != lastButtonState) {
+                lastButtonState = tempState;
+                Serial.println("Button Pressed");
+                if(!tempState) {
+                        Serial.println("Toggle Logging");
+                        loggingEnabled = !loggingEnabled;
+                }
+        }
+
+
         if(millis() - loopTimer >= halfLoopTime) {
                 loopTimer = millis();
                 // triggers at double speed and runs display and data logging alternately to better divide CPU time
@@ -113,10 +107,11 @@ void loop() {
                         loopCount = 1;
                         updateCount += 1;
                         updateDisplay();
-                        generateData();
+                        // generateData();
                 }else{ // Do logging things
                         loopCount = 0;
-                        // writeToSD();
+                        if(loggingEnabled)
+                                writeToSD();
                 }
         }
 }
@@ -129,14 +124,14 @@ void generateData(){
         }
 
         if(data.lambda < 18) {
-                data.lambda += 0.5;
+                data.lambda += 0.12;
         }else{
                 data.lambda = 10;
         }
 
-        data.coolantTemp = 100.12;
-        data.oilTemp = 100.21;
-        data.oilPressure = 120;
+        data.coolantTemp = 80;
+        data.oilTemp = 120;
+        data.oilPressure = 40;
 }
 
 void updateDisplay(){
@@ -160,20 +155,40 @@ void updateDisplay(){
         // sprintf(buff, "%i", data.motorRPM);
         // display.drawRightString(buff,135,7,6);
         //LAMBDA
-        sprintf(buff, "%.2f",data.lambda);
+        sprintf(buff, "%2.2f",data.lambda);
         display.drawRightString(buff, 250, 7, 6);
+
         // Coolant temp
-        sprintf(buff, "%3.2f",data.coolantTemp);
+        if(data.coolantTemp > 95) {
+                display.fillRect(2, 44,51, 15, WHITE);
+                display.setTextColor(BLACK);
+        }
+        sprintf(buff, "%3i",(int)data.coolantTemp);
         display.drawCentreString("CT:", 2, 45, 2);
-        display.drawRightString(buff, 65, 45, 2);
+        display.drawRightString(buff, 50, 45, 2);
+
+
         // Oil Pressure
-        sprintf(buff, "%3.2f",data.oilPressure);
+        display.setTextColor(WHITE);
+        if(data.oilPressure <50 && data.motorRPM > 8000) {
+                display.fillRect(70, 44,51, 15, WHITE);
+                display.setTextColor(BLACK);
+        }
+        sprintf(buff, "%3i",(int)data.oilPressure);
         display.drawRightString("OP:", 90, 45, 2);
-        display.drawRightString(buff, 136, 45, 2);
+        display.drawRightString(buff, 121, 45, 2);
+
+
         // Oil Temp
-        sprintf(buff, "%3.2f",data.oilTemp);
+        display.setTextColor(WHITE);
+        if(data.oilTemp > 140) {
+                display.fillRect(141, 44,51, 15, WHITE);
+                display.setTextColor(BLACK);
+        }
+
+        sprintf(buff, "%3i",(int)data.oilTemp);
         display.drawRightString("OT:", 161, 45, 2);
-        display.drawRightString(buff, 207, 45, 2);
+        display.drawRightString(buff, 192, 45, 2);
 
         //Bars
         float rpmEnd = 0.0182 * data.motorRPM; // 256/maxRPM i.e 14000
@@ -189,26 +204,26 @@ void updateDisplay(){
 
         //Lambda x100 for resolution
         int lambda = ((float)data.lambda-10)*100;
-        int midPoint = 390;
-        int midPointPix = 0.32 * midPoint;
-        int readingPix = 0.32 * lambda;
+        int midPoint = 300;
+        int midPointPix = 0.4 * midPoint;
+        int readingPix = 0.4 * lambda;
 
         if(readingPix < midPointPix) {
                 display.fillRect(readingPix, 60,midPointPix-readingPix, 63, WHITE);
-                for(int i = 0; i < midPointPix; i+= 32) {
+                for(int i = 0; i < midPointPix; i+= 20) {
                         if(i>readingPix)
                                 display.drawLine(i, 60, i, 63, BLACK);
                 }
         }else{
                 display.fillRect(midPointPix, 60, readingPix-midPointPix, 63, WHITE);
-                for(int i = 256; i > midPointPix; i-= 32) {
+                for(int i = 256; i > midPointPix; i-= 20) {
                         if(i<readingPix)
                                 display.drawLine(i, 60, i, 63, BLACK);
                 }
         }
 
         if(loggingEnabled) {
-                if(cardWorking) {
+                if(sdFound) {
                         display.drawRightString("LOG", 250, 45, 2);
                 }else{
                         display.drawRightString("ERR", 250, 45, 2);
@@ -229,42 +244,16 @@ void updateDisplay(){
         display.display();
         // data.motorRPM = millis() - dispTime;
 }
-// void updateDisplay(){
-//         //Updates display with  latest data availa ble
-//         display.clearDisplay(); // inneficient - if this takes too much time we need to send differences, rather than clear and send whole display.
-//
-//         //RPM
-//         char buff[10];
-//         // display.drawRect(2,7,128, 32, 0xFFFF);
-//         display.setTextColor(WHITE);
-//         sprintf(buff, "%5i", data.motorRPM);
-//         display.drawString(buff,2,7,6);
-//         //LAMBDA
-//         sprintf(buff, "%.2f",data.lambda);
-//         display.drawRightString(buff, 220, 7, 6);
-//         // Coolant temp
-//         sprintf(buff, "%.2f",data.coolantTemp);
-//         display.drawRightString("CT: ", 2, 45, 2);
-//         display.drawRightString(buff, 90, 45, 4);
-//         // Oil Pressure
-//         // display.drawRightString("OP: "+ String(data.oilPressure,1)+"PSI", 100, 45, 4);
-//         // Oil Temp
-//         // display.drawRightString("OT: "+ String(data.oilTemp,1)+"c", 150, 45, 4);
-//
-//         // long dispTime = millis();
-//         display.display();
-//         // data.motorRPM = millis() - dispTime;
-// }
 
 void writeToSD(){
         if(sdFound) {
-                long sdTime = millis();
+                // long sdTime = millis();
                 dataFile = SD.open("log.csv", FILE_WRITE);
                 if(dataFile) {
                         String stringBuff = String(millis()) +","+ String(data.motorRPM) +","+String(data.lambda)+","+String(data.tps)+","+String(data.coolantTemp)+","+String(data.oilTemp)+","+String(data.oilPressure);
                         dataFile.println(stringBuff);
-                        Serial.print("SD Write Time: ");
-                        Serial.println(millis() - sdTime);
+                        // Serial.print("SD Write Time: ");
+                        // Serial.println(millis() - sdTime);
                 }else{
                         Serial.println("Failed to open log.csv");
                         sdFound = 0;
