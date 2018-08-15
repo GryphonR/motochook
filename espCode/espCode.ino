@@ -74,7 +74,7 @@ void setup()   {
         pinMode(13, OUTPUT);
         pinMode(16, OUTPUT);
         pinMode(12, INPUT);
-        Serial.begin(9600);
+        Serial.begin(115200);
         Serial.println("Serial Initialised");
         sdSetup();
         displaySetup();
@@ -317,14 +317,19 @@ float dataDecode(char b1, char b2){
         float val = 0;
         //First calculate the value in b1 and b2
         //Check for 0
+        // Serial.print("b2, B2: ");
+        // Serial.print(b1);
+        // Serial.print(",");
+        // Serial.println(b2);
         if( b1 == 0xFF && b2 == 0xFF) {
                 val = 0;
-        } else if (b1 && 0x10000000) { // check flag for integer
-                val = ((int)b1 - 128)*100 + (int)b2;
+        } else if (b1 > 127) { // check flag for integer
+                val = (b1 - 128)*100 + b2;
                 Serial.print("integer value decoded as: ");
                 Serial.println(val);
         } else{ //value is a float
-                val = (float)((int)b1 + ((int)b2/100));
+                // THere is a permanent rounding down error in this of -0.01. +0.01 to compensate.
+                val = b1 + ((float)b2+1)/100;
                 Serial.print("Float value decoded as: ");
                 Serial.println(val);
         }
