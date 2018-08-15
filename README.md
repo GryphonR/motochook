@@ -24,6 +24,7 @@ D2 - Engine RPM
 ### Dependencies
 
 [ESP8266_SSD1322](https://github.com/winneymj/ESP8266_SSD1322)
+
 [Bounce 2](https://github.com/thomasfredericks/Bounce2)
 
 NB: As of 08/18 the version of Sd2Card.cpp included in the ESP8266 Arduino libraries needs modifying for this to work. As default it has the SPI speed for the SD card hard coded to 250KHz.
