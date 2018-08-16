@@ -31,9 +31,9 @@ NB: As of 08/18 the version of Sd2Card.cpp included in the ESP8266 Arduino libra
 
 Line 286 needs to be modified from
 ```
-Sd2Card.cpp to settings = SPISettings(250000, MSBFIRST, SPI_MODE0);
+settings = SPISettings(250000, MSBFIRST, SPI_MODE0);
 ```
 to
 ```
-Sd2Card.cpp to settings = SPISettings(sckRateID, MSBFIRST, SPI_MODE0);
+settings = SPISettings(sckRateID, MSBFIRST, SPI_MODE0);
 ```
