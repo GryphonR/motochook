@@ -61,6 +61,7 @@ const long    BT_BAUDRATE       = 115200;           // Baud Rate to run at. Must
 /** ________________________________________________________________________________________ CONSTANTS */
 /* DATA TRANSMIT INTERVALS */
 const unsigned long     SHORT_DATA_TRANSMIT_INTERVAL     = 100;     // transmit interval in ms
+const unsigned long     LONG_DATA_TRANSMIT_INTERVAL     = 100;     // transmit interval in ms
 
 
 /** ___________________________________________________________________________________________________ DATA IDENTIFIERS */
@@ -79,7 +80,8 @@ const unsigned long     SHORT_DATA_TRANSMIT_INTERVAL     = 100;     // transmit 
 /** ================================== */
 /** ___________________________________________________________________________________________________ TIMING VARIABLES */
 unsigned long   lastShortDataSendTime       = 0;
-unsigned long   lastMotorSpeedPollTime      = 0;    // poll interval for wheel speed
+unsigned long   lastLongDataSendTime        = 0;
+unsigned long   lastMotorSpeedPollTime[3]   = {0,0,0};    // poll interval for wheel speed
 int       	  	loopCounter              		= 0;
 
 
@@ -88,15 +90,19 @@ int       	  	loopCounter              		= 0;
  *  that each time the variable is accessed it is the master copy in RAM rather than a cached version within the CPU.
  *  This way the main loop and the ISR variables are always in sync
  */
-volatile unsigned long motorPoll      = 0;
+volatile unsigned int motorPoll[3] = {0,0,0};
+int motorPollCount = 0;
 
+
+int rpmFilterArray[10];
+int rpmFilterCount = 0;
 
 /** ___________________________________________________________________________________________________ Sensor Readings */
 
 float coolantTemp           = 0;
 float throttle        		  = 0;
 float lambda                = 0;
-float oilPressure       		    = 0;
+float oilPressure       	  = 0;
 float motorRPM        		  = 0;
 float oilTemp       		    = 0;
 
@@ -105,7 +111,7 @@ float oilTemp       		    = 0;
 
 
 /** ================================== */
-/** SETUP                              */
+/** SETUP                                */
 /** ================================== */
 void setup()
 {
@@ -150,7 +156,8 @@ void setup()
 
   Serial.begin(BT_BAUDRATE);    // Bluetooth and USB communications
 
-  lastShortDataSendTime - millis(); //Give the timing a start value.
+  lastShortDataSendTime = millis(); //Give the timing a start value.
+  lastLongDataSendTime = millis(); //Give the timing a start value.
 
 } //End of Setup
 
@@ -162,6 +169,28 @@ void loop()
   // As such, these are only updated ever 1 second. Temperature is a reading that will not change fast, and consumes more processing
   // time to calculate than most, so this is also checked every 1s.
 
+
+  if (millis() - lastLongDataSendTime >= LONG_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
+  {
+    lastLongDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
+    motorRPM = readMotorRPM();
+    // rpmFilterArray[rpmFilterCount] = motorRPM;
+    // rpmFilterCount ++;
+    // if(rpmFilterCount == 10){
+    //   rpmFilterCount = 0;
+    // }
+    //
+    // int sum = 0;
+    //
+    // for(int i = 0; i<10; i++){
+    //   sum += rpmFilterCount;
+    // }
+    //
+    // motorRPM = sum/10;
+
+    sendData(MOTOR_ID, motorRPM);
+
+  }
 
   if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
   {
@@ -184,8 +213,6 @@ void loop()
     oilTemp = readOilTemp();
     sendData(OIL_TEMP_ID, oilTemp);
 
-    motorRPM = readMotorRPM();
-    sendData(MOTOR_ID, motorRPM);
 
 
     //  for motoChook, all these bits do is blink LEDs to give a visual heartbeat
@@ -283,25 +310,32 @@ float readOilTemp()
 float readMotorRPM()
 {
   // First action is to take copies of the motor poll count and time so that the variables don't change during the calculations.
+  int tempMotorPoll = motorPoll[motorPollCount];
+  motorPoll[motorPollCount] = 0;
 
-  int tempMotorPoll = motorPoll;
-  motorPoll = 0;
-
-
-  unsigned long tempLastMotorPollTime = lastMotorSpeedPollTime;
   unsigned long tempMotorPollTime = millis();
-  lastMotorSpeedPollTime = tempMotorPollTime;
+  unsigned long tempLastMotorPollTime = lastMotorSpeedPollTime[motorPollCount];
+  lastMotorSpeedPollTime[motorPollCount] = tempMotorPollTime;
+
+
+  motorPollCount = motorPollCount < 2? motorPollCount+1 : 0; //If count is less than 2, increment, else 0
+
 
   // Now calculate the number of revolutions of the motor shaft
 
+  int pulsesPerRevolution = 3;
+
   float motorRevolutions = tempMotorPoll; //assuming one poll per revolution. Otherwise a divider is needed
-
-  float motorRevolutionsPerMin = motorRevolutions * 60.0;
-
   float timeDiffms = tempMotorPollTime - tempLastMotorPollTime;
-  float timeDiffs = timeDiffms / 1000.0;
 
-  float motorShaftRPM = motorRevolutionsPerMin / timeDiffs;
+  // How many time periods in a minute:
+  // 60000 ms per  minute
+  float tppm = 60000/timeDiffms;
+
+  //pulses per minute
+  float ppm = motorRevolutions * tppm;
+
+  float motorShaftRPM = ppm/pulsesPerRevolution;
 
   return (motorShaftRPM);
 }
@@ -468,5 +502,7 @@ void sendData(char identifier, int value)
  */
 void motorSpeedISR()
 {
-  motorPoll++;
+  motorPoll[0]++;
+  motorPoll[1]++;
+  motorPoll[2]++;
 }
