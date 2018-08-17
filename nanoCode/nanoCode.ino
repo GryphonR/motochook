@@ -60,8 +60,8 @@ const long BT_BAUDRATE       = 115200;              // Baud Rate to run at. Must
 
 /** ________________________________________________________________________________________ CONSTANTS */
 /* DATA TRANSMIT INTERVALS */
-const unsigned long     SHORT_DATA_TRANSMIT_INTERVAL     = 100;     // transmit interval in ms
-const unsigned long     LONG_DATA_TRANSMIT_INTERVAL     = 100;     // transmit interval in ms
+const unsigned long SHORT_DATA_TRANSMIT_INTERVAL     = 100;         // transmit interval in ms
+const unsigned long LONG_DATA_TRANSMIT_INTERVAL     = 100;         // transmit interval in ms
 
 
 /** ___________________________________________________________________________________________________ DATA IDENTIFIERS */
@@ -79,10 +79,10 @@ const char OIL_TEMP_ID        = 'o';
 /** VARIABLES                          */
 /** ================================== */
 /** ___________________________________________________________________________________________________ TIMING VARIABLES */
-unsigned long   lastShortDataSendTime       = 0;
-unsigned long   lastLongDataSendTime        = 0;
-unsigned long   lastMotorSpeedPollTime[3]   = {0,0,0};    // poll interval for wheel speed
-int       	  	loopCounter              		= 0;
+unsigned long lastShortDataSendTime       = 0;
+unsigned long lastLongDataSendTime        = 0;
+unsigned long lastMotorSpeedPollTime[3]   = {0,0,0};      // poll interval for wheel speed
+int loopCounter                 = 0;
 
 
 /** ___________________________________________________________________________________________________ INTERRUPT VERIABLES */
@@ -102,9 +102,9 @@ int rpmFilterCount = 0;
 float coolantTemp           = 0;
 float throttle              = 0;
 float lambda                = 0;
-float oilPressure       	  = 0;
-float motorRPM        		  = 0;
-float oilTemp       		    = 0;
+float oilPressure           = 0;
+float motorRPM              = 0;
+float oilTemp               = 0;
 
 
 /** ___________________________________________________________________________________________________ Smoothing Variables */
@@ -116,48 +116,48 @@ float oilTemp       		    = 0;
 void setup()
 {
 
-  //Set up pin modes for all inputs and outputs
-  pinMode(LED_1_OUT_PIN,        OUTPUT);
-  pinMode(LED_2_OUT_PIN,        OUTPUT);
+        //Set up pin modes for all inputs and outputs
+        pinMode(LED_1_OUT_PIN,        OUTPUT);
+        pinMode(LED_2_OUT_PIN,        OUTPUT);
 
-  pinMode(COOL_TEMP_IN_PIN,  	  INPUT);
-  pinMode(OIL_PRESSURE_IN_PIN,      	INPUT);
-  pinMode(THROTTLE_IN_PIN,    	INPUT);
-  pinMode(OIL_PRESSURE_IN_PIN,        	INPUT);
-  pinMode(OIL_TEMP_IN_PIN,       	INPUT);
+        pinMode(COOL_TEMP_IN_PIN,     INPUT);
+        pinMode(OIL_PRESSURE_IN_PIN,        INPUT);
+        pinMode(THROTTLE_IN_PIN,      INPUT);
+        pinMode(OIL_PRESSURE_IN_PIN,          INPUT);
+        pinMode(OIL_TEMP_IN_PIN,        INPUT);
 
-  /**
-   * Set up Interrupts:
-   * When the specified digital change is seen on a the interrupt pin it will pause the main loop and
-   * run the code in the Interrupt Service Routine (ISR) before resuming the main code.
-   * The interrupt number is not the pin number on the arduino Nano. For explanation see here:
-   * https://www.arduino.cc/en/Reference/AttachInterrupt
-  */
+        /**
+         * Set up Interrupts:
+         * When the specified digital change is seen on a the interrupt pin it will pause the main loop and
+         * run the code in the Interrupt Service Routine (ISR) before resuming the main code.
+         * The interrupt number is not the pin number on the arduino Nano. For explanation see here:
+         * https://www.arduino.cc/en/Reference/AttachInterrupt
+         */
 
-  attachInterrupt(0, motorSpeedISR, RISING);
+        attachInterrupt(0, motorSpeedISR, RISING);
 
-  /**
-   * Initialise Serial Communication
-   * If communication over bluetooth is not working or the results are garbled it is likely the
-   * baud rate set here (number in brakcets after Serial.begin) and the baud rate of the bluetooth
-   * module aren't set the same.
-   *
-   * A good tutorial for altering the HC-05 Bluetooth Module parameters is here:
-   * http://www.instructables.com/id/Modify-The-HC-05-Bluetooth-Module-Defaults-Using-A/
-   *
-   * The HC-05 modules commonly come preset with baud rates of 9600 or 32000
-   *
-   * Alternatively the following bit of code will attempt to automatically configure a
-   * HC-05 module if it is plugged in in AT (setup) mode then the arduino is reset. (Power Arduino,
-   * unplug HC-05 module, press button on HC-05 module, plug back in holding button [light should blink slowly],
-   * release button, then reset Arduino)
-  */
+        /**
+         * Initialise Serial Communication
+         * If communication over bluetooth is not working or the results are garbled it is likely the
+         * baud rate set here (number in brakcets after Serial.begin) and the baud rate of the bluetooth
+         * module aren't set the same.
+         *
+         * A good tutorial for altering the HC-05 Bluetooth Module parameters is here:
+         * http://www.instructables.com/id/Modify-The-HC-05-Bluetooth-Module-Defaults-Using-A/
+         *
+         * The HC-05 modules commonly come preset with baud rates of 9600 or 32000
+         *
+         * Alternatively the following bit of code will attempt to automatically configure a
+         * HC-05 module if it is plugged in in AT (setup) mode then the arduino is reset. (Power Arduino,
+         * unplug HC-05 module, press button on HC-05 module, plug back in holding button [light should blink slowly],
+         * release button, then reset Arduino)
+         */
 
 
-  Serial.begin(BT_BAUDRATE);    // Bluetooth and USB communications
+        Serial.begin(BT_BAUDRATE); // Bluetooth and USB communications
 
-  lastShortDataSendTime = millis(); //Give the timing a start value.
-  lastLongDataSendTime = millis(); //Give the timing a start value.
+        lastShortDataSendTime = millis(); //Give the timing a start value.
+        lastLongDataSendTime = millis(); //Give the timing a start value.
 
 } //End of Setup
 
@@ -170,32 +170,32 @@ void loop()
         // time to calculate than most, so this is also checked every 1s.
 
 
-  if (millis() - lastLongDataSendTime >= LONG_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
-  {
-    lastLongDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
-    motorRPM = readMotorRPM();
-    // rpmFilterArray[rpmFilterCount] = motorRPM;
-    // rpmFilterCount ++;
-    // if(rpmFilterCount == 10){
-    //   rpmFilterCount = 0;
-    // }
-    //
-    // int sum = 0;
-    //
-    // for(int i = 0; i<10; i++){
-    //   sum += rpmFilterCount;
-    // }
-    //
-    // motorRPM = sum/10;
+        if (millis() - lastLongDataSendTime >= LONG_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
+        {
+                lastLongDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
+                motorRPM = readMotorRPM();
+                // rpmFilterArray[rpmFilterCount] = motorRPM;
+                // rpmFilterCount ++;
+                // if(rpmFilterCount == 10){
+                //   rpmFilterCount = 0;
+                // }
+                //
+                // int sum = 0;
+                //
+                // for(int i = 0; i<10; i++){
+                //   sum += rpmFilterCount;
+                // }
+                //
+                // motorRPM = sum/10;
 
-    sendData(MOTOR_ID, motorRPM);
+                sendData(MOTOR_ID, motorRPM);
 
-  }
+        }
 
-  if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
-  {
-    lastShortDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
-    loopCounter = loopCounter + 1; // This value will loop 1-4, the 1s update variables will update on certain loops to spread the processing time.
+        if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
+        {
+                lastShortDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
+                loopCounter = loopCounter + 1; // This value will loop 1-4, the 1s update variables will update on certain loops to spread the processing time.
 
                 //It is recommended to leave the ADC a short recovery period between readings (~1ms). To ensure this we can transmit the data between readings
 
@@ -278,7 +278,10 @@ float readLambda()
 
 float readOilPressure()
 {
+        // Reading 0-5v from ADC. Comes through as 0-1024.
         float tempOP = analogRead(OIL_PRESSURE_IN_PIN);
+
+        // tempOP = 5/1024 * actual voltage reading
 
         tempOP = map((int)tempOP, 102,921,0,1500)/10;
 
@@ -286,11 +289,11 @@ float readOilPressure()
 }
 
 
-int readThrottle() //This function is for a variable Throttle input
+float readThrottle() //This function is for a variable Throttle input
 {
-        int tempThrottle = analogRead(THROTTLE_IN_PIN);
+        float tempThrottle = analogRead(THROTTLE_IN_PIN);
 
-        tempThrottle = map(tempThrottle, 102, 905, 0, 100);
+        tempThrottle = map((int)tempThrottle, 102, 905, 0, 1000)/10;
 
         return (tempThrottle);
 }
@@ -311,33 +314,33 @@ float readOilTemp()
 
 float readMotorRPM()
 {
-  // First action is to take copies of the motor poll count and time so that the variables don't change during the calculations.
-  int tempMotorPoll = motorPoll[motorPollCount];
-  motorPoll[motorPollCount] = 0;
+        // First action is to take copies of the motor poll count and time so that the variables don't change during the calculations.
+        int tempMotorPoll = motorPoll[motorPollCount];
+        motorPoll[motorPollCount] = 0;
 
-  unsigned long tempMotorPollTime = millis();
-  unsigned long tempLastMotorPollTime = lastMotorSpeedPollTime[motorPollCount];
-  lastMotorSpeedPollTime[motorPollCount] = tempMotorPollTime;
+        unsigned long tempMotorPollTime = millis();
+        unsigned long tempLastMotorPollTime = lastMotorSpeedPollTime[motorPollCount];
+        lastMotorSpeedPollTime[motorPollCount] = tempMotorPollTime;
 
 
-  motorPollCount = motorPollCount < 2? motorPollCount+1 : 0; //If count is less than 2, increment, else 0
+        motorPollCount = motorPollCount < 2 ? motorPollCount+1 : 0; //If count is less than 2, increment, else 0
 
 
         // Now calculate the number of revolutions of the motor shaft
 
-  int pulsesPerRevolution = 3;
+        int pulsesPerRevolution = 3;
 
-  float motorRevolutions = tempMotorPoll; //assuming one poll per revolution. Otherwise a divider is needed
-  float timeDiffms = tempMotorPollTime - tempLastMotorPollTime;
+        float motorRevolutions = tempMotorPoll; //assuming one poll per revolution. Otherwise a divider is needed
+        float timeDiffms = tempMotorPollTime - tempLastMotorPollTime;
 
-  // How many time periods in a minute:
-  // 60000 ms per  minute
-  float tppm = 60000/timeDiffms;
+        // How many time periods in a minute:
+        // 60000 ms per  minute
+        float tppm = 60000/timeDiffms;
 
-  //pulses per minute
-  float ppm = motorRevolutions * tppm;
+        //pulses per minute
+        float ppm = motorRevolutions * tppm;
 
-  float motorShaftRPM = ppm/pulsesPerRevolution;
+        float motorShaftRPM = ppm/pulsesPerRevolution;
 
         return (motorShaftRPM);
 }
@@ -504,7 +507,7 @@ void sendData(char identifier, int value)
  */
 void motorSpeedISR()
 {
-  motorPoll[0]++;
-  motorPoll[1]++;
-  motorPoll[2]++;
+        motorPoll[0]++;
+        motorPoll[1]++;
+        motorPoll[2]++;
 }
