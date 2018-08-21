@@ -352,7 +352,7 @@ void assignValue(char id, float val){
                 data.oilPressure = val;
                 break;
         case 'm':
-                data.motorRPM = val;
+                data.motorRPM = val*10;
                 break;
         case 'o':
                 data.oilTemp = val;

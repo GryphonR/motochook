@@ -80,7 +80,6 @@ const char OIL_TEMP_ID        = 'o';
 /** ================================== */
 /** ___________________________________________________________________________________________________ TIMING VARIABLES */
 unsigned long lastShortDataSendTime       = 0;
-unsigned long lastLongDataSendTime        = 0;
 unsigned long lastMotorSpeedPollTime[3]   = {0,0,0};      // poll interval for wheel speed
 int loopCounter                 = 0;
 
@@ -134,7 +133,7 @@ void setup()
          * https://www.arduino.cc/en/Reference/AttachInterrupt
          */
 
-        attachInterrupt(0, motorSpeedISR, RISING);
+        attachInterrupt(0, motorSpeedISR, CHANGE);
 
         /**
          * Initialise Serial Communication
@@ -157,47 +156,20 @@ void setup()
         Serial.begin(BT_BAUDRATE); // Bluetooth and USB communications
 
         lastShortDataSendTime = millis(); //Give the timing a start value.
-        lastLongDataSendTime = millis(); //Give the timing a start value.
 
 } //End of Setup
 
 void loop()
 {
-        // We want to check different variables at different rates. For most variables 0.25 seconds will be good for logging and analysis.
-        // Certain variables either can't have or do not need this resolution.
-        // Wheel and Motor speed are accumulated over time, so the longer time left between samples, the higher the resolution of the value.
-        // As such, these are only updated ever 1 second. Temperature is a reading that will not change fast, and consumes more processing
-        // time to calculate than most, so this is also checked every 1s.
 
-
-        if (millis() - lastLongDataSendTime >= LONG_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
-        {
-                lastLongDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
-                motorRPM = readMotorRPM();
-                // rpmFilterArray[rpmFilterCount] = motorRPM;
-                // rpmFilterCount ++;
-                // if(rpmFilterCount == 10){
-                //   rpmFilterCount = 0;
-                // }
-                //
-                // int sum = 0;
-                //
-                // for(int i = 0; i<10; i++){
-                //   sum += rpmFilterCount;
-                // }
-                //
-                // motorRPM = sum/10;
-
-                sendData(MOTOR_ID, motorRPM);
-
-        }
-
-        if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL) //i.e. if 250ms have passed since this code last ran
+        if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL) //i.e. if 100ms have passed since this code last ran
         {
                 lastShortDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
                 loopCounter = loopCounter + 1; // This value will loop 1-4, the 1s update variables will update on certain loops to spread the processing time.
 
                 //It is recommended to leave the ADC a short recovery period between readings (~1ms). To ensure this we can transmit the data between readings
+                motorRPM = readMotorRPM();
+                sendData(MOTOR_ID, motorRPM);
 
                 coolantTemp = readCoolantTemp();
                 // coolantTemp = 0;
@@ -293,7 +265,13 @@ float readThrottle() //This function is for a variable Throttle input
 {
         float tempThrottle = analogRead(THROTTLE_IN_PIN);
 
-        tempThrottle = map((int)tempThrottle, 102, 905, 0, 1000)/10;
+        if(tempThrottle < CAL_THROTTLE_COUNT_MIN) {
+                tempThrottle = CAL_THROTTLE_COUNT_MIN;
+        }else if(tempThrottle > CAL_THROTTLE_COUNT_MAX) {
+                tempThrottle = CAL_THROTTLE_COUNT_MAX;
+        }
+
+        tempThrottle = map((int)tempThrottle, CAL_THROTTLE_COUNT_MIN, CAL_THROTTLE_COUNT_MAX, 0, 1000)/10;
 
         return (tempThrottle);
 }
@@ -322,14 +300,9 @@ float readMotorRPM()
         unsigned long tempLastMotorPollTime = lastMotorSpeedPollTime[motorPollCount];
         lastMotorSpeedPollTime[motorPollCount] = tempMotorPollTime;
 
-
         motorPollCount = motorPollCount < 2 ? motorPollCount+1 : 0; //If count is less than 2, increment, else 0
 
-
         // Now calculate the number of revolutions of the motor shaft
-
-        int pulsesPerRevolution = 3;
-
         float motorRevolutions = tempMotorPoll; //assuming one poll per revolution. Otherwise a divider is needed
         float timeDiffms = tempMotorPollTime - tempLastMotorPollTime;
 
@@ -340,7 +313,7 @@ float readMotorRPM()
         //pulses per minute
         float ppm = motorRevolutions * tppm;
 
-        float motorShaftRPM = ppm/pulsesPerRevolution;
+        float motorShaftRPM = ppm/(CAL_MOTOR_PULSES_PER_REVOLUTION*2); //Interrupt triggers on the rising and falling edges, therefore doubles the signal, hence the *2 on the divider
 
         return (motorShaftRPM);
 }
