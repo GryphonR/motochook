@@ -46,22 +46,11 @@ const int OIL_TEMP_IN_PIN     = A5;    // Analog input pin for temp sensor 1
 /** ___________________________________________________________________________________________________ DIGITAL INTERRUPT PINS */
 const int MOTOR_RPM_PIN       = 2;      // Digital interrupt for motor pulses
 
-/** ___________________________________________________________________________________________________ DIGITAL AND PWM OUTPUT PINS */
-const int LED_1_OUT_PIN       = 6;     // PWM Output for LED 1
-const int LED_2_OUT_PIN       = 9;     // PWM Output for LED 2
-
-
-/** ________________________________________________________________________________________ BLUETOOTH CONSTANTS */
-/* Communication SETUP PARAMETERS */
-const long BT_BAUDRATE       = 115200;              // Baud Rate to run at. Must match Arduino's baud rate.
-
-//Bluetooth module uses hardware serial from Arduino, so Arduino Tx -> HC05 Rx, Ard Rx -> HC Tx. EN and Status are disconnected.
-
 
 /** ________________________________________________________________________________________ CONSTANTS */
 /* DATA TRANSMIT INTERVALS */
 const unsigned long SHORT_DATA_TRANSMIT_INTERVAL     = 100;         // transmit interval in ms
-const unsigned long LONG_DATA_TRANSMIT_INTERVAL     = 100;         // transmit interval in ms
+const unsigned long MOTOR_CHECK_INTERVAL     = 10;         // transmit interval in ms
 
 
 /** ___________________________________________________________________________________________________ DATA IDENTIFIERS */
@@ -80,7 +69,7 @@ const char OIL_TEMP_ID        = 'o';
 /** ================================== */
 /** ___________________________________________________________________________________________________ TIMING VARIABLES */
 unsigned long lastShortDataSendTime       = 0;
-unsigned long lastMotorSpeedPollTime[3]   = {0,0,0};      // poll interval for wheel speed
+unsigned long lastMotorCheckTime       = 0;
 int loopCounter                 = 0;
 
 
@@ -89,12 +78,19 @@ int loopCounter                 = 0;
  *  that each time the variable is accessed it is the master copy in RAM rather than a cached version within the CPU.
  *  This way the main loop and the ISR variables are always in sync
  */
-volatile unsigned int motorPoll[3] = {0,0,0};
-int motorPollCount = 0;
+volatile unsigned int motorTime = 0;
 
+unsigned int rpmFilterArray[16];
+uint8_t rpmFilterCount = 0;
 
-int rpmFilterArray[10];
-int rpmFilterCount = 0;
+unsigned int opFilterArray[16];
+uint8_t opFilterCount = 0;
+
+unsigned int ctFilterArray[32];
+uint8_t ctFilterCount = 0;
+
+unsigned int otFilterArray[32];
+uint8_t otFilterCount = 0;
 
 /** ___________________________________________________________________________________________________ Sensor Readings */
 
@@ -108,6 +104,7 @@ float oilTemp               = 0;
 
 /** ___________________________________________________________________________________________________ Smoothing Variables */
 
+unsigned int calcConstant = 4; //microseconds per count
 
 /** ================================== */
 /** SETUP                                */
@@ -125,47 +122,53 @@ void setup()
         pinMode(OIL_PRESSURE_IN_PIN,          INPUT);
         pinMode(OIL_TEMP_IN_PIN,        INPUT);
 
-        /**
-         * Set up Interrupts:
-         * When the specified digital change is seen on a the interrupt pin it will pause the main loop and
-         * run the code in the Interrupt Service Routine (ISR) before resuming the main code.
-         * The interrupt number is not the pin number on the arduino Nano. For explanation see here:
-         * https://www.arduino.cc/en/Reference/AttachInterrupt
+        pinMode(8, INPUT);
+        pinMode(3, OUTPUT);
+
+
+        //Hardware counter for pulse Timestamp
+        /*
+           CS12 CS11 CS10
+           0    0    0    no clock
+           0    0    1    /1 - 16MHz
+           0    1    0    /8 - 2MHz
+           0    1    1    /64 - 256KHz
+           1    0    0    /256
+           1    0    1    /1024
+           1    1    0    External clock, falling edge
+           1    1    1    External clock, rising edge
          */
+        // Set up hardware counter for RPM:
+        // Setting count speed to 250KHz, and enabling input capture mode. This allows us to capture the number of counts at 250KHz between each RPM pulse.
 
-        attachInterrupt(0, motorSpeedISR, CHANGE);
+        TCCR1A = 0;                     // this register set to 0!
+        TCCR1B =_BV(CS11);
+        TCCR1B |= _BV(CS10);            // 256khz
+        TCCR1B |= _BV(ICES1);           // enable input capture
 
-        /**
-         * Initialise Serial Communication
-         * If communication over bluetooth is not working or the results are garbled it is likely the
-         * baud rate set here (number in brakcets after Serial.begin) and the baud rate of the bluetooth
-         * module aren't set the same.
-         *
-         * A good tutorial for altering the HC-05 Bluetooth Module parameters is here:
-         * http://www.instructables.com/id/Modify-The-HC-05-Bluetooth-Module-Defaults-Using-A/
-         *
-         * The HC-05 modules commonly come preset with baud rates of 9600 or 32000
-         *
-         * Alternatively the following bit of code will attempt to automatically configure a
-         * HC-05 module if it is plugged in in AT (setup) mode then the arduino is reset. (Power Arduino,
-         * unplug HC-05 module, press button on HC-05 module, plug back in holding button [light should blink slowly],
-         * release button, then reset Arduino)
-         */
+        TIMSK1 |= ((1<<ICIE1) | (1<<TOIE1));                         // enable input capture interrupt for timer 1 // enable overflow interrupt to detect missing input pulses
 
-
-        Serial.begin(BT_BAUDRATE); // Bluetooth and USB communications
+        Serial.begin(115200); // Bluetooth and USB communications
 
         lastShortDataSendTime = millis(); //Give the timing a start value.
+        lastMotorCheckTime = millis();
+
 
 } //End of Setup
 
 void loop()
 {
+        // This addes the latest motor pulse time to an array
+        if(millis() - lastMotorCheckTime >= MOTOR_CHECK_INTERVAL ) {
+                rpmFilterArray[rpmFilterCount] = motorTime;
+                rpmFilterCount = rpmFilterCount < 15 ? rpmFilterCount+1 : 0;
+        }
 
-        if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL) //i.e. if 100ms have passed since this code last ran
+
+        if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL)         //i.e. if 100ms have passed since this code last ran
         {
-                lastShortDataSendTime = millis(); //this is reset at the start so that the calculation time does not add to the loop time
-                loopCounter = loopCounter + 1; // This value will loop 1-4, the 1s update variables will update on certain loops to spread the processing time.
+                lastShortDataSendTime = millis();         //this is reset at the start so that the calculation time does not add to the loop time
+                loopCounter = loopCounter + 1;         // This value will loop 1-4, the 1s update variables will update on certain loops to spread the processing time.
 
                 //It is recommended to leave the ADC a short recovery period between readings (~1ms). To ensure this we can transmit the data between readings
                 motorRPM = readMotorRPM();
@@ -175,7 +178,7 @@ void loop()
                 // coolantTemp = 0;
                 sendData(COOL_TEMP_ID, coolantTemp);
 
-                throttle = readThrottle(); // if this is being used as the input to a motor controller it is recommended to check it at a higher frequency than 4Hz
+                throttle = readThrottle();         // if this is being used as the input to a motor controller it is recommended to check it at a higher frequency than 4Hz
                 sendData(THROTTLE_INPUT_ID, throttle);
 
                 lambda = readLambda();
@@ -192,7 +195,7 @@ void loop()
                 //  for motoChook, all these bits do is blink LEDs to give a visual heartbeat
                 if (loopCounter == 1)
                 {
-                        digitalWrite(13, HIGH); //these are just flashing the LEDs as visual confimarion of the loop
+                        digitalWrite(13, HIGH);         //these are just flashing the LEDs as visual confimarion of the loop
                         digitalWrite(9, HIGH);
                 }
 
@@ -201,14 +204,14 @@ void loop()
                 }
 
                 if (loopCounter == 3)
-                { //nothing actaully needed to do at .75 seconds
+                {         //nothing actaully needed to do at .75 seconds
                         digitalWrite(13, LOW);
                         digitalWrite(9, LOW);
                 }
 
                 if (loopCounter == 4)
                 {
-                        loopCounter = 0; //4 * 0.25 makes one second, so counter resets
+                        loopCounter = 0;         //4 * 0.25 makes one second, so counter resets
                 }
 
         }
@@ -234,7 +237,17 @@ float readCoolantTemp()
                 tempCoolantTemp = -0.1105*tempCoolantTemp + 81.596; //Trendline formula from Excel
         }
 
-        return (tempCoolantTemp);
+        ctFilterArray[ctFilterCount] = tempCoolantTemp;
+        ctFilterCount = ctFilterCount < 31 ? ctFilterCount+1 : 0;
+
+        unsigned int tempCount = 0;
+        for(int i = 0; i < 32; i++) {
+                tempCount += ctFilterArray[i];
+        }
+
+        tempCount = tempCount >> 5; //quick div by 32
+
+        return (tempCount);
 }
 
 float readLambda()
@@ -257,7 +270,18 @@ float readOilPressure()
 
         tempOP = map((int)tempOP, 102,921,0,1500)/10;
 
-        return (tempOP);
+        opFilterArray[opFilterCount] = tempOP;
+        opFilterCount = opFilterCount < 15 ? opFilterCount+1 : 0;
+
+        unsigned int tempCount = 0;
+        for(int i = 0; i < 16; i++) {
+                tempCount += opFilterArray[i];
+        }
+
+        tempCount = tempCount >> 4; //quick div by 16
+
+        return (tempCount);
+
 }
 
 
@@ -286,57 +310,36 @@ float readOilTemp()
                 temp = -0.1233*temp+129.76;
         }
 
-        return (temp); //return Temperature.
+        otFilterArray[otFilterCount] = temp;
+        otFilterCount = otFilterCount < 31 ? otFilterCount+1 : 0;
+
+        unsigned int tempCount = 0;
+        for(int i = 0; i < 32; i++) {
+                tempCount += otFilterArray[i];
+        }
+
+        tempCount = tempCount >> 5; //quick div by 32
+
+        return (tempCount);
+
 }
 
 
 float readMotorRPM()
 {
-        // First action is to take copies of the motor poll count and time so that the variables don't change during the calculations.
-        int tempMotorPoll = motorPoll[motorPollCount];
-        motorPoll[motorPollCount] = 0;
+        unsigned int tempRpm = 0;
 
-        unsigned long tempMotorPollTime = millis();
-        unsigned long tempLastMotorPollTime = lastMotorSpeedPollTime[motorPollCount];
-        lastMotorSpeedPollTime[motorPollCount] = tempMotorPollTime;
+        for(uint_t i= 0; i<16; i++) {
+                tempRpm += rpmFilterArray[i];
+        }
 
-        motorPollCount = motorPollCount < 2 ? motorPollCount+1 : 0; //If count is less than 2, increment, else 0
+        tempRpm = tempRpm >> 4; //Quick divide by 16 (2^4 = 16)
 
-        // Now calculate the number of revolutions of the motor shaft
-        float motorRevolutions = tempMotorPoll; //assuming one poll per revolution. Otherwise a divider is needed
-        float timeDiffms = tempMotorPollTime - tempLastMotorPollTime;
+        tempRpm = 6000000/(calcConstant*tempRpm);
 
-        // How many time periods in a minute:
-        // 60000 ms per  minute
-        float tppm = 60000/timeDiffms;
-
-        //pulses per minute
-        float ppm = motorRevolutions * tppm;
-
-        float motorShaftRPM = ppm/(CAL_MOTOR_PULSES_PER_REVOLUTION*2); //Interrupt triggers on the rising and falling edges, therefore doubles the signal, hence the *2 on the divider
-
-        return (motorShaftRPM);
+        return (tempRpm);
 }
 
-
-/**
- * Calculation Functions
- *
- * Where calculations are needed multiple times, they are broken out into their own functions here
- */
-
-
-/** ================================== */
-/** BLUETOOTH DATA PACKETING FUNCTIONS */
-/** ================================== */
-/** The two functions in this section handle packeting the data and sending it over USART to the bluetooth module. The two functions are
- *  identically named so are called the in the same way, however the first is run if the value passed to it is a float and the second is
- *  run if the value passed into it is an integer (an override function). For all intents and purposes you can ignore this and simply call
- *  'sendData(identifier, value);' using one of the defined identifiers and either a float or integer value to send informaion over BT.
- *
- * identifier:  see definitions at start of code
- * value:       the value to send (typically some caluclated value from a sensor)
- */
 
 void sendData(char identifier, float value)
 {
@@ -344,14 +347,12 @@ void sendData(char identifier, float value)
         {
                 byte dataByte1;
                 byte dataByte2;
-
                 if (value == 0)
                 {
                         // It is impossible to send null bytes over Serial connection
                         // so instead we define zero as 0xFF or 11111111 i.e. 255
                         dataByte1 = 0xFF;
                         dataByte2 = 0xFF;
-
                 }
                 else if (value <= 127)
                 {
@@ -360,24 +361,15 @@ void sendData(char identifier, float value)
                         int integer;
                         int decimal;
                         float tempDecimal;
-
                         integer = (int) value;
                         tempDecimal = (value - (float) integer) * 100;
                         decimal = (int) tempDecimal;
-
                         dataByte1 = (byte) integer;
                         dataByte2 = (byte) decimal;
-
                         if (decimal == 0)
-                        {
                                 dataByte2 = 0xFF;
-                        }
-
                         if (integer == 0)
-                        {
                                 dataByte1 = 0xFF;
-                        }
-
                 }
                 else
                 {
@@ -385,26 +377,16 @@ void sendData(char identifier, float value)
                         // i.e. value = dataByte1 * 100 + dataByte2
                         int tens;
                         int hundreds;
-
                         hundreds = (int)(value / 100);
                         tens = value - hundreds * 100;
-
                         dataByte1 = (byte)hundreds;
-                        //dataByte1 = dataByte1 || 0x10000000; //flag for integer send value
                         dataByte1 += 128;
                         dataByte2 = (byte) tens;
-
                         if (tens == 0)
-                        {
                                 dataByte2 = 0xFF;
-                        }
-
                         if (hundreds == 0)
-                        {
                                 dataByte1 = 0xFF;
-                        }
                 }
-
                 // Send the data in the format { [id] [1] [2] }
                 Serial.write(123);
                 Serial.write(identifier);
@@ -423,16 +405,13 @@ void sendData(char identifier, int value)
         {
                 byte dataByte1;
                 byte dataByte2;
-
                 if (value == 0)
                 {
                         dataByte1 = 0xFF;
                         dataByte2 = 0xFF;
-
                 }
                 else if (value <= 127)
                 {
-
                         dataByte1 = (byte)value;
                         dataByte2 = 0xFF; //we know there's no decimal component as an int was passed in
                 }
@@ -440,25 +419,16 @@ void sendData(char identifier, int value)
                 {
                         int tens;
                         int hundreds;
-
                         hundreds = (int)(value / 100);
                         tens = value - hundreds * 100;
-
                         dataByte1 = (byte)hundreds;
                         dataByte1 += 128; //sets MSB High to indicate Integer value
                         dataByte2 = (byte) tens;
-
                         if (tens == 0)
-                        {
                                 dataByte2 = 0xFF;
-                        }
-
                         if (hundreds == 0)
-                        {
                                 dataByte1 = 0xFF;
-                        }
                 }
-
                 Serial.write(123);
                 Serial.write(identifier);
                 Serial.write(dataByte1);
@@ -472,15 +442,8 @@ void sendData(char identifier, int value)
 /** INTERRUPT SERVICE ROUTINES         */
 /** ================================== */
 
-/** This function is triggered every time the magnet on the motor shaft passes the Hall effect
- *  sensor. Care must be taken to ensure the sensor is position the correct way and so is the
- *  magnet as it will only respond in a specific orientation and magnet pole.
- *
- *  It is best practice to keep ISRs as small as possible.
- */
-void motorSpeedISR()
-{
-        motorPoll[0]++;
-        motorPoll[1]++;
-        motorPoll[2]++;
+
+ISR(TIMER1_CAPT_vect){
+        TCNT1 = 0;                      // reset the counter
+        motorTime = ICR1;              // save the input capture value
 }
