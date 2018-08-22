@@ -1,29 +1,8 @@
-/***** ======================================================================================================================================== *****/
-/*****           ====================================================================================================================           *****/
-/*****                     ================================================================================================                     *****/
-/*****                                                                                                                                          *****/
-/*****                                                       eChook Telemetry Board Code                                                        *****/
-/*****                                                              ARDUINO NANO                                                                *****/
-/*****                                                                                                                                          *****/
-/*****                                                    Modified for engine signal logging                                                    *****/
-/*****                                                                                                                                          *****/
-/*****                                                               IAN COOPER                                                                 *****/
-/*****                                                             ROWAN GRIFFIN                                                                *****/
-/*****                                                                BEN NAGY                                                                  *****/
-/*****                                                              MATT RUDLING                                                                *****/
-/*****                                                                                                                                          *****/
-/*****                     ================================================================================================                     *****/
-/*****           ====================================================================================================================           *****/
-/***** ======================================================================================================================================== *****/
-
-
-
 /** ================================== */
 /** Includes                           */
 /** ================================== */
 
 #include <math.h>
-#include <Bounce2.h>
 #include "Calibration.h"
 
 
@@ -113,9 +92,6 @@ void setup()
 {
 
         //Set up pin modes for all inputs and outputs
-        pinMode(LED_1_OUT_PIN,        OUTPUT);
-        pinMode(LED_2_OUT_PIN,        OUTPUT);
-
         pinMode(COOL_TEMP_IN_PIN,     INPUT);
         pinMode(OIL_PRESSURE_IN_PIN,        INPUT);
         pinMode(THROTTLE_IN_PIN,      INPUT);
@@ -123,7 +99,6 @@ void setup()
         pinMode(OIL_TEMP_IN_PIN,        INPUT);
 
         pinMode(8, INPUT);
-        pinMode(3, OUTPUT);
 
 
         //Hardware counter for pulse Timestamp
@@ -314,7 +289,7 @@ float readOilTemp()
         otFilterCount = otFilterCount < 31 ? otFilterCount+1 : 0;
 
         unsigned int tempCount = 0;
-        for(int i = 0; i < 32; i++) {
+        for(uint8_t i = 0; i < 32; i++) {
                 tempCount += otFilterArray[i];
         }
 
@@ -329,7 +304,7 @@ float readMotorRPM()
 {
         unsigned int tempRpm = 0;
 
-        for(uint_t i= 0; i<16; i++) {
+        for(uint8_t i= 0; i<16; i++) {
                 tempRpm += rpmFilterArray[i];
         }
 
