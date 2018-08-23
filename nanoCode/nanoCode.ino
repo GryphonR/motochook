@@ -59,6 +59,7 @@ int loopCounter                 = 0;
  */
 volatile unsigned int motorTime = 0;
 
+//Sensor Filter Arrays
 unsigned int rpmFilterArray[16];
 uint8_t rpmFilterCount = 0;
 
