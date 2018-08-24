@@ -57,20 +57,23 @@ int loopCounter                 = 0;
  *  that each time the variable is accessed it is the master copy in RAM rather than a cached version within the CPU.
  *  This way the main loop and the ISR variables are always in sync
  */
-volatile unsigned int motorTime = 0;
+volatile unsigned int motorCount = 0;
+unsigned long lastMotorUpdate = 0;
+unsigned long lastMotorCount = 0;
+
 
 //Sensor Filter Arrays
 unsigned int rpmFilterArray[16];
-uint8_t rpmFilterCount = 0;
+int rpmFilterCount = 0;
 
 unsigned int opFilterArray[16];
-uint8_t opFilterCount = 0;
+int opFilterCount = 0;
 
 unsigned int ctFilterArray[32];
-uint8_t ctFilterCount = 0;
+int ctFilterCount = 0;
 
 unsigned int otFilterArray[32];
-uint8_t otFilterCount = 0;
+int otFilterCount = 0;
 
 /** ___________________________________________________________________________________________________ Sensor Readings */
 
@@ -98,8 +101,9 @@ void setup()
         pinMode(THROTTLE_IN_PIN,      INPUT);
         pinMode(OIL_PRESSURE_IN_PIN,          INPUT);
         pinMode(OIL_TEMP_IN_PIN,        INPUT);
+        pinMode(LAMBDA_IN_PIN, INPUT_PULLUP);
 
-        pinMode(8, INPUT);
+        pinMode(8, INPUT_PULLUP);
 
 
         //Hardware counter for pulse Timestamp
@@ -128,6 +132,7 @@ void setup()
 
         lastShortDataSendTime = millis(); //Give the timing a start value.
         lastMotorCheckTime = millis();
+        motorCount = 0; //initialises to a random figure otherwise
 
 
 } //End of Setup
@@ -136,7 +141,16 @@ void loop()
 {
         // This addes the latest motor pulse time to an array
         if(millis() - lastMotorCheckTime >= MOTOR_CHECK_INTERVAL ) {
-                rpmFilterArray[rpmFilterCount] = motorTime;
+                rpmFilterArray[rpmFilterCount] = motorCount;
+
+                if(lastMotorCount != motorCount){
+                  lastMotorUpdate = millis();
+                }else if(millis()-lastMotorUpdate > 2000)
+                {
+                  motorCount = 0;
+                }
+
+                lastMotorCount = motorCount;
                 rpmFilterCount = rpmFilterCount < 15 ? rpmFilterCount+1 : 0;
         }
 
@@ -144,7 +158,6 @@ void loop()
         if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL)         //i.e. if 100ms have passed since this code last ran
         {
                 lastShortDataSendTime = millis();         //this is reset at the start so that the calculation time does not add to the loop time
-                loopCounter = loopCounter + 1;         // This value will loop 1-4, the 1s update variables will update on certain loops to spread the processing time.
 
                 //It is recommended to leave the ADC a short recovery period between readings (~1ms). To ensure this we can transmit the data between readings
                 motorRPM = readMotorRPM();
@@ -156,6 +169,7 @@ void loop()
 
                 throttle = readThrottle();         // if this is being used as the input to a motor controller it is recommended to check it at a higher frequency than 4Hz
                 sendData(THROTTLE_INPUT_ID, throttle);
+                // sendData(LAMBDA_ID, throttle);
 
                 lambda = readLambda();
                 // lambda = 15.82;
@@ -167,28 +181,6 @@ void loop()
 
                 oilTemp = readOilTemp();
                 sendData(OIL_TEMP_ID, oilTemp);
-
-                //  for motoChook, all these bits do is blink LEDs to give a visual heartbeat
-                if (loopCounter == 1)
-                {
-                        digitalWrite(13, HIGH);         //these are just flashing the LEDs as visual confimarion of the loop
-                        digitalWrite(9, HIGH);
-                }
-
-                if (loopCounter == 2)
-                {
-                }
-
-                if (loopCounter == 3)
-                {         //nothing actaully needed to do at .75 seconds
-                        digitalWrite(13, LOW);
-                        digitalWrite(9, LOW);
-                }
-
-                if (loopCounter == 4)
-                {
-                        loopCounter = 0;         //4 * 0.25 makes one second, so counter resets
-                }
 
         }
 
@@ -213,17 +205,31 @@ float readCoolantTemp()
                 tempCoolantTemp = -0.1105*tempCoolantTemp + 81.596; //Trendline formula from Excel
         }
 
-        ctFilterArray[ctFilterCount] = tempCoolantTemp;
-        ctFilterCount = ctFilterCount < 31 ? ctFilterCount+1 : 0;
+        // Serial.print("New Value = ");
+        // Serial.println (tempCoolantTemp);
+        //
+        // Serial.print("Array Count = ");
+        // Serial.println (ctFilterCount);
 
-        unsigned int tempCount = 0;
-        for(int i = 0; i < 32; i++) {
-                tempCount += ctFilterArray[i];
-        }
+        // ctFilterArray[ctFilterCount] = tempCoolantTemp;
+        // ctFilterCount = ctFilterCount < 31 ? ctFilterCount+1 : 0;
 
-        tempCount = tempCount >> 5; //quick div by 32
+        // ctFilterCount = ctFilterCount +1;
+        //
+        // unsigned int tempCount = 0;
+        //
+        // for(int i = 0; i < 32; i++) {
+        //         tempCount = tempCount + ctFilterArray[i];
+        // }
+        //
+        //
+        // tempCount = tempCount >> 5; //quick div by 32
+        //
+        // Serial.print("Averaged = ");
+        // Serial.println (tempCount);
+        // return (tempCount);
 
-        return (tempCount);
+        return(tempCoolantTemp);
 }
 
 float readLambda()
@@ -244,6 +250,10 @@ float readOilPressure()
 
         // tempOP = 5/1024 * actual voltage reading
 
+        if(tempOP < 102){
+          tempOP = 102;
+        }
+
         tempOP = map((int)tempOP, 102,921,0,1500)/10;
 
         opFilterArray[opFilterCount] = tempOP;
@@ -256,7 +266,7 @@ float readOilPressure()
 
         tempCount = tempCount >> 4; //quick div by 16
 
-        return (tempCount);
+        return (tempOP);
 
 }
 
@@ -296,7 +306,7 @@ float readOilTemp()
 
         tempCount = tempCount >> 5; //quick div by 32
 
-        return (tempCount);
+        return (temp);
 
 }
 
@@ -313,7 +323,7 @@ float readMotorRPM()
 
         tempRpm = 6000000/(calcConstant*tempRpm);
 
-        return (tempRpm);
+        return (tempRpm/3);
 }
 
 
@@ -421,5 +431,5 @@ void sendData(char identifier, int value)
 
 ISR(TIMER1_CAPT_vect){
         TCNT1 = 0;                      // reset the counter
-        motorTime = ICR1;              // save the input capture value
+        motorCount = ICR1;              // save the input capture value
 }

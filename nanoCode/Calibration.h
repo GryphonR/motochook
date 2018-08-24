@@ -13,10 +13,15 @@
  */
 
 
+#define OP_FILTER_ENABLE
+#define OT_FILTER_ENABLE
+#define CT_FILTER_ENABLE
+
+
 const int CAL_MOTOR_PULSES_PER_REVOLUTION = 3;     //Outer circumference of tyre, in Meters. i.e. the distance travelled in one revolution
 
-const int CAL_THROTTLE_COUNT_MIN = 70;
-const int CAL_THROTTLE_COUNT_MAX = 993;
+const int CAL_THROTTLE_COUNT_MIN = 52;
+const int CAL_THROTTLE_COUNT_MAX = 957;
 
 //Board Specific Calibrations
 const float CAL_REFERENCE_VOLTAGE   = 5;     // Voltage seen on the arduino 5V rail
