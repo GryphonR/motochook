@@ -12,16 +12,26 @@
  *
  */
 
+//DEBUG_MODE.  If 1, no data is sent to screen, allowing debug serial to be added.
+#define DEBUG_MODE 0
 
+// Filter toggles. To disable a filter, comment out the relevent line
 #define OP_FILTER_ENABLE
 #define OT_FILTER_ENABLE
 #define CT_FILTER_ENABLE
 
+//Time over which the rolling average is taken. 1 = 100ms, 5 = 0.5 seconds, 10 = 1 second
+#define CAL_OP_FILTER_TIME 5
+#define CAL_OT_FILTER_TIME 30
+#define CAL_CT_FILTER_TIME 30
 
-const int CAL_MOTOR_PULSES_PER_REVOLUTION = 3;     //Outer circumference of tyre, in Meters. i.e. the distance travelled in one revolution
+// Throttle Calibration mode - with this enabled it will display on screen instead of LAMBDA
+// and will display 'counts' instead of percentage. Use this to determine Min and Max counts for
+// 0 and 100%, and enter them below. Uncomment to  Enable/Comment to disable.
 
-const int CAL_THROTTLE_COUNT_MIN = 52;
-const int CAL_THROTTLE_COUNT_MAX = 957;
+// #define THROTTLE_CAL_MODE
 
-//Board Specific Calibrations
-const float CAL_REFERENCE_VOLTAGE   = 5;     // Voltage seen on the arduino 5V rail
+#define CAL_THROTTLE_COUNT_MIN 52
+#define CAL_THROTTLE_COUNT_MAX 957
+
+#define CAL_MOTOR_PULSES_PER_REVOLUTION 3

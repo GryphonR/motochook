@@ -5,12 +5,6 @@
 #include <math.h>
 #include "Calibration.h"
 
-
-/** ================================== */
-/** BUILD OPTIONS                      */
-/** ================================== */
-const int DEBUG_MODE = 0; //if debug mode is on, no data will be sent via bluetooth. This is to make any debug messages easier to see.
-
 /** ================================== */
 /** CONSTANTS                          */
 /** ================================== */
@@ -57,23 +51,23 @@ int loopCounter                 = 0;
  *  that each time the variable is accessed it is the master copy in RAM rather than a cached version within the CPU.
  *  This way the main loop and the ISR variables are always in sync
  */
-volatile unsigned int motorCount = 0;
-unsigned long lastMotorUpdate = 0;
-unsigned long lastMotorCount = 0;
+volatile unsigned int motorCount;
+unsigned long lastMotorUpdate;
+unsigned long lastMotorCount;
 
 
 //Sensor Filter Arrays
+uint8_t rpmFilterCount = 0;
+uint8_t opFilterCount = 0;
+uint8_t ctFilterCount = 0;
+uint8_t otFilterCount = 0;
+
 unsigned int rpmFilterArray[16];
-int rpmFilterCount = 0;
+unsigned int opFilterArray[CAL_OP_FILTER_TIME];
+unsigned int ctFilterArray[CAL_CT_FILTER_TIME];
+unsigned int otFilterArray[CAL_OT_FILTER_TIME];
 
-unsigned int opFilterArray[16];
-int opFilterCount = 0;
 
-unsigned int ctFilterArray[32];
-int ctFilterCount = 0;
-
-unsigned int otFilterArray[32];
-int otFilterCount = 0;
 
 /** ___________________________________________________________________________________________________ Sensor Readings */
 
@@ -85,7 +79,6 @@ float motorRPM              = 0;
 float oilTemp               = 0;
 
 
-/** ___________________________________________________________________________________________________ Smoothing Variables */
 
 unsigned int calcConstant = 4; //microseconds per count
 
@@ -126,13 +119,16 @@ void setup()
         TCCR1B |= _BV(CS10);            // 256khz
         TCCR1B |= _BV(ICES1);           // enable input capture
 
-        TIMSK1 |= ((1<<ICIE1) | (1<<TOIE1));                         // enable input capture interrupt for timer 1 // enable overflow interrupt to detect missing input pulses
+        TIMSK1 |= (1<<ICIE1);            // enable input capture interrupt for timer 1
+
+        // NOTE: I couldn't get the overflow interrupt to  work with the expected interrupt vector, however if it is enabled and not handled it
+        // resets some (but not all) of my global variables at each overflow event... really odd!
+        // TIMSK1 |= (1<<TOIE1);           // enable overflow interrupt to detect missing input pulses
 
         Serial.begin(115200); // Bluetooth and USB communications
 
         lastShortDataSendTime = millis(); //Give the timing a start value.
         lastMotorCheckTime = millis();
-        motorCount = 0; //initialises to a random figure otherwise
 
 
 } //End of Setup
@@ -149,6 +145,7 @@ void loop()
                 {
                   motorCount = 0;
                 }
+
 
                 lastMotorCount = motorCount;
                 rpmFilterCount = rpmFilterCount < 15 ? rpmFilterCount+1 : 0;
@@ -168,12 +165,16 @@ void loop()
                 sendData(COOL_TEMP_ID, coolantTemp);
 
                 throttle = readThrottle();         // if this is being used as the input to a motor controller it is recommended to check it at a higher frequency than 4Hz
+#ifdef THROTTLE_CAL_MODE
+                sendData(LAMBDA_ID, throttle);
+#else
                 sendData(THROTTLE_INPUT_ID, throttle);
-                // sendData(LAMBDA_ID, throttle);
+#endif
 
                 lambda = readLambda();
-                // lambda = 15.82;
+#ifndef THROTTLE_CAL_MODE
                 sendData(LAMBDA_ID, lambda);
+#endif
 
                 // oilPressure = 120;
                 oilPressure = readOilPressure();
@@ -204,32 +205,21 @@ float readCoolantTemp()
         }else{
                 tempCoolantTemp = -0.1105*tempCoolantTemp + 81.596; //Trendline formula from Excel
         }
+#ifdef CT_FILTER_ENABLE
+        ctFilterArray[ctFilterCount] = tempCoolantTemp;
+        ctFilterCount = ctFilterCount < CAL_CT_FILTER_TIME-1 ? ctFilterCount+1 : 0;
 
-        // Serial.print("New Value = ");
-        // Serial.println (tempCoolantTemp);
-        //
-        // Serial.print("Array Count = ");
-        // Serial.println (ctFilterCount);
+        unsigned int tempCount = 0;
 
-        // ctFilterArray[ctFilterCount] = tempCoolantTemp;
-        // ctFilterCount = ctFilterCount < 31 ? ctFilterCount+1 : 0;
+        for(int i = 0; i < CAL_CT_FILTER_TIME; i++) {
+                tempCount = tempCount + ctFilterArray[i];
+        }
 
-        // ctFilterCount = ctFilterCount +1;
-        //
-        // unsigned int tempCount = 0;
-        //
-        // for(int i = 0; i < 32; i++) {
-        //         tempCount = tempCount + ctFilterArray[i];
-        // }
-        //
-        //
-        // tempCount = tempCount >> 5; //quick div by 32
-        //
-        // Serial.print("Averaged = ");
-        // Serial.println (tempCount);
-        // return (tempCount);
-
+        tempCount = tempCount >> 5; //quick div by 32
+        return(tempCount);
+#else
         return(tempCoolantTemp);
+#endif
 }
 
 float readLambda()
@@ -256,25 +246,29 @@ float readOilPressure()
 
         tempOP = map((int)tempOP, 102,921,0,1500)/10;
 
+#ifdef OP_FILTER_ENABLE
+
         opFilterArray[opFilterCount] = tempOP;
-        opFilterCount = opFilterCount < 15 ? opFilterCount+1 : 0;
+        opFilterCount = opFilterCount < CAL_OP_FILTER_TIME-1 ? opFilterCount+1 : 0;
+
 
         unsigned int tempCount = 0;
-        for(int i = 0; i < 16; i++) {
+        for(int i = 0; i < CAL_OP_FILTER_TIME; i++) {
                 tempCount += opFilterArray[i];
         }
 
         tempCount = tempCount >> 4; //quick div by 16
-
+        return(tempCount);
+#else
         return (tempOP);
-
+#endif
 }
 
 
 float readThrottle() //This function is for a variable Throttle input
 {
         float tempThrottle = analogRead(THROTTLE_IN_PIN);
-
+#ifndef THROTTLE_CAL_MODE
         if(tempThrottle < CAL_THROTTLE_COUNT_MIN) {
                 tempThrottle = CAL_THROTTLE_COUNT_MIN;
         }else if(tempThrottle > CAL_THROTTLE_COUNT_MAX) {
@@ -282,7 +276,7 @@ float readThrottle() //This function is for a variable Throttle input
         }
 
         tempThrottle = map((int)tempThrottle, CAL_THROTTLE_COUNT_MIN, CAL_THROTTLE_COUNT_MAX, 0, 1000)/10;
-
+#endif
         return (tempThrottle);
 }
 
@@ -296,17 +290,21 @@ float readOilTemp()
                 temp = -0.1233*temp+129.76;
         }
 
+#ifdef OT_FILTER_ENABLE
         otFilterArray[otFilterCount] = temp;
-        otFilterCount = otFilterCount < 31 ? otFilterCount+1 : 0;
+        otFilterCount = otFilterCount < CAL_OT_FILTER_TIME-1 ? otFilterCount+1 : 0;
 
         unsigned int tempCount = 0;
-        for(uint8_t i = 0; i < 32; i++) {
+        for(uint8_t i = 0; i < CAL_OT_FILTER_TIME; i++) {
                 tempCount += otFilterArray[i];
         }
 
         tempCount = tempCount >> 5; //quick div by 32
 
-        return (temp);
+        return (tempCount);
+#else
+        return(temp);
+#endif
 
 }
 
@@ -323,7 +321,7 @@ float readMotorRPM()
 
         tempRpm = 6000000/(calcConstant*tempRpm);
 
-        return (tempRpm/3);
+        return (tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION);
 }
 
 
@@ -430,6 +428,6 @@ void sendData(char identifier, int value)
 
 
 ISR(TIMER1_CAPT_vect){
-        TCNT1 = 0;                      // reset the counter
-        motorCount = ICR1;              // save the input capture value
+  TCNT1 = 0;                      // reset the counter
+  motorCount = ICR1;              // save the input capture value
 }
