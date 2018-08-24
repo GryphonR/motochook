@@ -135,21 +135,21 @@ void setup()
 
 void loop()
 {
-        // This addes the latest motor pulse time to an array
-        if(millis() - lastMotorCheckTime >= MOTOR_CHECK_INTERVAL ) {
-                rpmFilterArray[rpmFilterCount] = motorCount;
-
-                if(lastMotorCount != motorCount){
-                  lastMotorUpdate = millis();
-                }else if(millis()-lastMotorUpdate > 2000)
-                {
-                  motorCount = 0;
-                }
-
-
-                lastMotorCount = motorCount;
-                rpmFilterCount = rpmFilterCount < 15 ? rpmFilterCount+1 : 0;
-        }
+        // // This addes the latest motor pulse time to an array
+        // if(millis() - lastMotorCheckTime >= MOTOR_CHECK_INTERVAL ) {
+        //         rpmFilterArray[rpmFilterCount] = motorCount;
+        //
+        //         if(lastMotorCount != motorCount){
+        //           lastMotorUpdate = millis();
+        //         }else if(millis()-lastMotorUpdate > 2000)
+        //         {
+        //           motorCount = 0;
+        //         }
+        //
+        //
+        //         lastMotorCount = motorCount;
+        //         rpmFilterCount = rpmFilterCount < 15 ? rpmFilterCount+1 : 0;
+        // }
 
 
         if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL)         //i.e. if 100ms have passed since this code last ran
@@ -311,15 +311,18 @@ float readOilTemp()
 
 float readMotorRPM()
 {
-        unsigned int tempRpm = 0;
+        // unsigned int tempRpm = 0;
+        //
+        // for(uint8_t i= 0; i<16; i++) {
+        //         tempRpm += rpmFilterArray[i];
+        // }
+        //
+        // tempRpm = tempRpm >> 4; //Quick divide by 16 (2^4 = 16)
 
-        for(uint8_t i= 0; i<16; i++) {
-                tempRpm += rpmFilterArray[i];
-        }
 
-        tempRpm = tempRpm >> 4; //Quick divide by 16 (2^4 = 16)
 
-        tempRpm = 6000000/(calcConstant*tempRpm);
+        // tempRpm = 6000000/(calcConstant*tempRpm);
+        unsigned int tempRpm = 6000000/(calcConstant*motorCount);
 
         return (tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION);
 }
