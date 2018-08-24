@@ -324,7 +324,44 @@ float readMotorRPM()
         // tempRpm = 6000000/(calcConstant*tempRpm);
         unsigned int tempRpm = 6000000/(calcConstant*motorCount);
 
-        return (tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION);
+        tempRpm = tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION;
+
+#ifdef TIMER_SWITCH_ENABLE
+        if(calcConstant == 4 && tempRpm < CAL_TIMER_SWITCH_LOWER_THRESHOLD){
+          setSlowCounter();
+        }else if(calcConstant == 16 && tempRpm > CAL_TIMER_SWITCH_UPPER_THRESHOLD){
+          setFastCounter();
+        }
+#endif
+
+        return (tempRpm);
+}
+
+//Functions to modify the RPM timers
+
+//Hardware counter for pulse Timestamp
+/*
+   CS12 CS11 CS10
+   0    0    0    no clock
+   0    0    1    /1 - 16MHz
+   0    1    0    /8 - 2MHz
+   0    1    1    /64 - 256KHz
+   1    0    0    /256
+   1    0    1    /1024
+   1    1    0    External clock, falling edge
+   1    1    1    External clock, rising edge
+ */
+
+void setSlowCounter(){
+  TCCR1B =_BV(CS11);
+  TCCR1B &= (0 << CS10);
+  calcConstant = 16;
+}
+
+void setFastCounter(){
+  TCCR1B =_BV(CS11);
+  TCCR1B |= (1 << CS10);
+  calcConstant = 4;
 }
 
 

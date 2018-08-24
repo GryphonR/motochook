@@ -35,3 +35,9 @@
 #define CAL_THROTTLE_COUNT_MAX 957
 
 #define CAL_MOTOR_PULSES_PER_REVOLUTION 3
+
+// Enable lowering the counter clock frequency at lower RPMs to stop overflows occuring
+// with low multipliers
+// #define TIMER_SWITCH_ENABLE
+#define CAL_TIMER_SWITCH_UPPER_THRESHOLD 5000
+#define CAL_TIMER_SWITCH_LOWER_THRESHOLD 3000
