@@ -215,7 +215,7 @@ float readCoolantTemp()
                 tempCount = tempCount + ctFilterArray[i];
         }
 
-        tempCount = tempCount >> 5; //quick div by 32
+        tempCount = tempCount / CAL_CT_FILTER_TIME; //quick div by 32
         return(tempCount);
 #else
         return(tempCoolantTemp);
@@ -257,7 +257,7 @@ float readOilPressure()
                 tempCount += opFilterArray[i];
         }
 
-        tempCount = tempCount >> 4; //quick div by 16
+        tempCount = tempCount / CAL_OP_FILTER_TIME; //quick div by 16
         return(tempCount);
 #else
         return (tempOP);
@@ -299,7 +299,7 @@ float readOilTemp()
                 tempCount += otFilterArray[i];
         }
 
-        tempCount = tempCount >> 5; //quick div by 32
+        tempCount = tempCount / CAL_OT_FILTER_TIME; //quick div by 32
 
         return (tempCount);
 #else
