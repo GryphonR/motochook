@@ -117,7 +117,7 @@ void setup()
         TCCR1A = 0;                     // this register set to 0!
         TCCR1B =_BV(CS11);
         TCCR1B |= _BV(CS10);            // 256khz
-        TCCR1B |= _BV(ICES1);           // enable input capture
+        TCCR1B |= _BV(CS12);           // external clock
 
         TIMSK1 |= (1<<ICIE1);            // enable input capture interrupt for timer 1
 
@@ -311,28 +311,27 @@ float readOilTemp()
 
 float readMotorRPM()
 {
-        // unsigned int tempRpm = 0;
-        //
-        // for(uint8_t i= 0; i<16; i++) {
-        //         tempRpm += rpmFilterArray[i];
-        // }
-        //
-        // tempRpm = tempRpm >> 4; //Quick divide by 16 (2^4 = 16)
+        long tempPoll = TCNT1;
+        TCNT1 = 0;
 
+        unsigned long tempMotorPollTime = millis();
+        unsigned long tempLastMotorPollTime = lastMotorCheckTime;;
+        lastMotorCheckTime = tempMotorPollTime;
 
+        // Now calculate the number of revolutions of the motor shaft
+        float motorRevolutions = tempMotorPoll; //assuming one poll per revolution. Otherwise a divider is needed
+        float timeDiffms = tempMotorPollTime - tempLastMotorPollTime;
 
-        // tempRpm = 6000000/(calcConstant*tempRpm);
-        unsigned int tempRpm = 6000000/(calcConstant*motorCount);
+        // How many time periods in a minute:
+        // 60000 ms per  minute
+        float tppm = 60000/timeDiffms;
 
-        tempRpm = tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION;
+        //pulses per minute
+        float ppm = motorRevolutions * tppm;
 
-#ifdef TIMER_SWITCH_ENABLE
-        if(calcConstant == 4 && tempRpm < CAL_TIMER_SWITCH_LOWER_THRESHOLD){
-          setSlowCounter();
-        }else if(calcConstant == 16 && tempRpm > CAL_TIMER_SWITCH_UPPER_THRESHOLD){
-          setFastCounter();
-        }
-#endif
+        float motorShaftRPM = ppm/(CAL_MOTOR_PULSES_PER_REVOLUTION);
+
+        return (motorShaftRPM);
 
         return (tempRpm);
 }
