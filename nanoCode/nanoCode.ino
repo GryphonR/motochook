@@ -135,23 +135,7 @@ void setup()
 
 void loop()
 {
-        // // This addes the latest motor pulse time to an array
-        // if(millis() - lastMotorCheckTime >= MOTOR_CHECK_INTERVAL ) {
-        //         rpmFilterArray[rpmFilterCount] = motorCount;
-        //
-        //         if(lastMotorCount != motorCount){
-        //           lastMotorUpdate = millis();
-        //         }else if(millis()-lastMotorUpdate > 2000)
-        //         {
-        //           motorCount = 0;
-        //         }
-        //
-        //
-        //         lastMotorCount = motorCount;
-        //         rpmFilterCount = rpmFilterCount < 15 ? rpmFilterCount+1 : 0;
-        // }
-
-
+    
         if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL)         //i.e. if 100ms have passed since this code last ran
         {
                 lastShortDataSendTime = millis();         //this is reset at the start so that the calculation time does not add to the loop time

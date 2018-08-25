@@ -34,7 +34,7 @@
 #define CAL_THROTTLE_COUNT_MIN 52
 #define CAL_THROTTLE_COUNT_MAX 957
 
-#define CAL_MOTOR_PULSES_PER_REVOLUTION 3
+#define CAL_MOTOR_PULSES_PER_REVOLUTION 1
 
 // Enable lowering the counter clock frequency at lower RPMs to stop overflows occuring
 // with low multipliers
