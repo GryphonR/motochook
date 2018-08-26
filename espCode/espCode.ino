@@ -321,17 +321,28 @@ float dataDecode(char b1, char b2){
         // Serial.print(b1);
         // Serial.print(",");
         // Serial.println(b2);
+        // char buff [50];
+        // sprintf(buff, "1: %x , 2: %x", b1, b2);
+        // Serial.println(buff);
         if( b1 == 0xFF && b2 == 0xFF) {
                 val = 0;
         } else if (b1 > 127) { // check flag for integer
+                if(b2 == 0xFF){
+                val = (b1 - 128)*100;
+              }else{
                 val = (b1 - 128)*100 + b2;
-                Serial.print("integer value decoded as: ");
-                Serial.println(val);
+              }
+                // Serial.print("integer value decoded as: ");
+                // Serial.println(val);
         } else{ //value is a float
                 // THere is a permanent rounding down error in this of -0.01. +0.01 to compensate.
+                if(b2 == 0xFF){
+                  val = b1;
+              }else{
                 val = b1 + ((float)b2+1)/100;
-                Serial.print("Float value decoded as: ");
-                Serial.println(val);
+              }
+                // Serial.print("Float value decoded as: ");
+                // Serial.println(val);
         }
 
         return val;
@@ -352,7 +363,10 @@ void assignValue(char id, float val){
                 data.oilPressure = val;
                 break;
         case 'm':
+                Serial.print("Recieved RPM: ");
+                Serial.println(val);
                 data.motorRPM = val*10;
+
                 break;
         case 'o':
                 data.oilTemp = val;
