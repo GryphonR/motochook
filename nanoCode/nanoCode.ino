@@ -300,30 +300,13 @@ float readOilTemp()
 
 int readMotorRPM()
 {
-        // unsigned int tempRpm = 0;
-        //
-        // for(uint8_t i= 0; i<16; i++) {
-        //         tempRpm += rpmFilterArray[i];
-        // }
-        //
-        // tempRpm = tempRpm >> 4; //Quick divide by 16 (2^4 = 16)
-
         unsigned long tempRpm;
-
-        // tempRpm = 6000000/(calcConstant*tempRpm);
         if(motorLive){
             motorLive = 0;
-            // tempRpm = 6000000/(calcConstant*motorCount);
+            tempRpm = 6000000/(calcConstant*motorCount);
             tempRpm = calcConstant/motorCount;
             tempRpm  += CAL_RPM_CORRECTION;
-            // tempRpm = tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION;
-#if DEBUG_MODE
-            Serial.print("Count In = ");
-            Serial.println(motorCount);
-
-            Serial.print("Output = ");
-            Serial.println(tempRpm);
-#endif
+            tempRpm = tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION;
         }else{
           tempRpm = 0;
         }
