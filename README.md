@@ -19,7 +19,7 @@ A5 - Oil Temp
 
 A7 - Lambda
 
-D2 - Engine RPM
+D2 and D8 - Engine RPM (Using timer1 input capture on D8 for accurate RPM and a liveness check on the signal from D2)
 
 ### Dependencies
 
