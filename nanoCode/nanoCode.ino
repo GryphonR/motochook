@@ -76,7 +76,7 @@ float coolantTemp           = 0;
 float throttle              = 0;
 float lambda                = 0;
 float oilPressure           = 0;
-float motorRPM              = 0;
+int motorRPM                = 0;
 float oilTemp               = 0;
 
 
@@ -298,7 +298,7 @@ float readOilTemp()
 }
 
 
-float readMotorRPM()
+int readMotorRPM()
 {
         // unsigned int tempRpm = 0;
         //
@@ -340,7 +340,7 @@ float readMotorRPM()
         }
 #endif
 
-        return (tempRpm);
+        return ((int)tempRpm);
 }
 
 //Functions to modify the RPM timers
