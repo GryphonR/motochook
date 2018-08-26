@@ -52,6 +52,7 @@ int loopCounter                 = 0;
  *  This way the main loop and the ISR variables are always in sync
  */
 volatile unsigned int motorCount;
+volatile uint8_t motorLive = 0;
 unsigned long lastMotorUpdate;
 unsigned long lastMotorCount;
 
@@ -80,13 +81,15 @@ float oilTemp               = 0;
 
 
 
-unsigned int calcConstant = 4; //microseconds per count
-
+unsigned int microsPerCount =  4; //microseconds per count
+unsigned long calcConstant;
 /** ================================== */
 /** SETUP                                */
 /** ================================== */
 void setup()
 {
+
+        calcConstant = 6000000/4;
 
         //Set up pin modes for all inputs and outputs
         pinMode(COOL_TEMP_IN_PIN,     INPUT);
@@ -94,7 +97,7 @@ void setup()
         pinMode(THROTTLE_IN_PIN,      INPUT);
         pinMode(OIL_PRESSURE_IN_PIN,          INPUT);
         pinMode(OIL_TEMP_IN_PIN,        INPUT);
-        pinMode(LAMBDA_IN_PIN, INPUT_PULLUP);
+        pinMode(LAMBDA_IN_PIN, INPUT);
 
         pinMode(8, INPUT_PULLUP);
 
@@ -127,6 +130,8 @@ void setup()
 
         Serial.begin(115200); // Bluetooth and USB communications
 
+        attachInterrupt(0, motorLiveISR, RISING);
+
         lastShortDataSendTime = millis(); //Give the timing a start value.
         lastMotorCheckTime = millis();
 
@@ -135,7 +140,7 @@ void setup()
 
 void loop()
 {
-    
+
         if (millis() - lastShortDataSendTime >= SHORT_DATA_TRANSMIT_INTERVAL)         //i.e. if 100ms have passed since this code last ran
         {
                 lastShortDataSendTime = millis();         //this is reset at the start so that the calculation time does not add to the loop time
@@ -303,12 +308,29 @@ float readMotorRPM()
         //
         // tempRpm = tempRpm >> 4; //Quick divide by 16 (2^4 = 16)
 
-
+        unsigned long tempRpm;
 
         // tempRpm = 6000000/(calcConstant*tempRpm);
-        unsigned int tempRpm = 6000000/(calcConstant*motorCount);
+        if(motorLive){
+            motorLive = 0;
+            // tempRpm = 6000000/(calcConstant*motorCount);
+            tempRpm = calcConstant/motorCount;
+            tempRpm  += CAL_RPM_CORRECTION;
+            // tempRpm = tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION;
+#if DEBUG_MODE
+            Serial.print("Count In = ");
+            Serial.println(motorCount);
 
-        tempRpm = tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION;
+            Serial.print("Output = ");
+            Serial.println(tempRpm);
+#endif
+        }else{
+          tempRpm = 0;
+        }
+
+
+
+
 
 #ifdef TIMER_SWITCH_ENABLE
         if(calcConstant == 4 && tempRpm < CAL_TIMER_SWITCH_LOWER_THRESHOLD){
@@ -450,6 +472,9 @@ void sendData(char identifier, int value)
 /** INTERRUPT SERVICE ROUTINES         */
 /** ================================== */
 
+void motorLiveISR(){
+  motorLive = 1;
+}
 
 ISR(TIMER1_CAPT_vect){
   TCNT1 = 0;                      // reset the counter

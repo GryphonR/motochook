@@ -31,10 +31,11 @@
 
 // #define THROTTLE_CAL_MODE
 
-#define CAL_THROTTLE_COUNT_MIN 52
-#define CAL_THROTTLE_COUNT_MAX 957
+#define CAL_THROTTLE_COUNT_MIN 46
+#define CAL_THROTTLE_COUNT_MAX 996
 
 #define CAL_MOTOR_PULSES_PER_REVOLUTION 1
+#define CAL_RPM_CORRECTION 1 // *10. A value added to calculated RPM as a constant offset
 
 // Enable lowering the counter clock frequency at lower RPMs to stop overflows occuring
 // with low multipliers
