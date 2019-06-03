@@ -92,12 +92,12 @@ void setup()
         calcConstant = 6000000/4;
 
         //Set up pin modes for all inputs and outputs
-        pinMode(COOL_TEMP_IN_PIN,     INPUT);
-        pinMode(OIL_PRESSURE_IN_PIN,        INPUT);
-        pinMode(THROTTLE_IN_PIN,      INPUT);
-        pinMode(OIL_PRESSURE_IN_PIN,          INPUT);
-        pinMode(OIL_TEMP_IN_PIN,        INPUT);
-        pinMode(LAMBDA_IN_PIN, INPUT);
+        pinMode(COOL_TEMP_IN_PIN,     INPUT_PULLUP);
+        pinMode(OIL_PRESSURE_IN_PIN,        INPUT_PULLUP);
+        pinMode(THROTTLE_IN_PIN,      INPUT_PULLUP);
+        pinMode(OIL_PRESSURE_IN_PIN,          INPUT_PULLUP);
+        pinMode(OIL_TEMP_IN_PIN,        INPUT_PULLUP);
+        pinMode(LAMBDA_IN_PIN, INPUT_PULLUP);
 
         pinMode(8, INPUT_PULLUP);
 
@@ -128,7 +128,7 @@ void setup()
         // resets some (but not all) of my global variables at each overflow event... really odd!
         // TIMSK1 |= (1<<TOIE1);           // enable overflow interrupt to detect missing input pulses
 
-        Serial.begin(115200); // Bluetooth and USB communications
+        Serial.begin(38400); // Bluetooth and USB communications
 
         attachInterrupt(0, motorLiveISR, RISING);
 
@@ -229,8 +229,8 @@ float readOilPressure()
 
         // tempOP = 5/1024 * actual voltage reading
 
-        if(tempOP < 102){
-          tempOP = 102;
+        if(tempOP < 102) {
+                tempOP = 102;
         }
 
         tempOP = map((int)tempOP, 102,921,0,1500)/10;
@@ -301,14 +301,14 @@ float readOilTemp()
 int readMotorRPM()
 {
         unsigned long tempRpm;
-        if(motorLive){
-            motorLive = 0;
-            tempRpm = 6000000/(calcConstant*motorCount);
-            tempRpm = calcConstant/motorCount;
-            tempRpm  += CAL_RPM_CORRECTION;
-            tempRpm = tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION;
+        if(motorLive) {
+                motorLive = 0;
+                tempRpm = 6000000/(calcConstant*motorCount);
+                tempRpm = calcConstant/motorCount;
+                tempRpm  += CAL_RPM_CORRECTION;
+                tempRpm = tempRpm/CAL_MOTOR_PULSES_PER_REVOLUTION;
         }else{
-          tempRpm = 0;
+                tempRpm = 0;
         }
 
 
@@ -316,10 +316,10 @@ int readMotorRPM()
 
 
 #ifdef TIMER_SWITCH_ENABLE
-        if(calcConstant == 4 && tempRpm < CAL_TIMER_SWITCH_LOWER_THRESHOLD){
-          setSlowCounter();
-        }else if(calcConstant == 16 && tempRpm > CAL_TIMER_SWITCH_UPPER_THRESHOLD){
-          setFastCounter();
+        if(calcConstant == 4 && tempRpm < CAL_TIMER_SWITCH_LOWER_THRESHOLD) {
+                setSlowCounter();
+        }else if(calcConstant == 16 && tempRpm > CAL_TIMER_SWITCH_UPPER_THRESHOLD) {
+                setFastCounter();
         }
 #endif
 
@@ -342,15 +342,15 @@ int readMotorRPM()
  */
 
 void setSlowCounter(){
-  TCCR1B =_BV(CS11);
-  TCCR1B &= (0 << CS10);
-  calcConstant = 16;
+        TCCR1B =_BV(CS11);
+        TCCR1B &= (0 << CS10);
+        calcConstant = 16;
 }
 
 void setFastCounter(){
-  TCCR1B =_BV(CS11);
-  TCCR1B |= (1 << CS10);
-  calcConstant = 4;
+        TCCR1B =_BV(CS11);
+        TCCR1B |= (1 << CS10);
+        calcConstant = 4;
 }
 
 
@@ -456,10 +456,10 @@ void sendData(char identifier, int value)
 /** ================================== */
 
 void motorLiveISR(){
-  motorLive = 1;
+        motorLive = 1;
 }
 
 ISR(TIMER1_CAPT_vect){
-  TCNT1 = 0;                      // reset the counter
-  motorCount = ICR1;              // save the input capture value
+        TCNT1 = 0;                // reset the counter
+        motorCount = ICR1;        // save the input capture value
 }

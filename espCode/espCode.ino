@@ -74,7 +74,7 @@ void setup()   {
         pinMode(13, OUTPUT);
         pinMode(16, OUTPUT);
         pinMode(12, INPUT);
-        Serial.begin(115200);
+        Serial.begin(38400);
         Serial.println("Serial Initialised");
         sdSetup();
         displaySetup();
@@ -270,7 +270,7 @@ void sdSetup(){
 
         Serial.println("Initializing SD card...");
 
-        if(!SD.begin(SD_CS, SPI_FULL_SPEED)) {
+        if(!SD.begin(SD_CS, SPI_HALF_SPEED)) {
                 Serial.println("SD.Begin failed");
                 // Serial.println(SD.errorCode());
                 return;
@@ -327,20 +327,20 @@ float dataDecode(char b1, char b2){
         if( b1 == 0xFF && b2 == 0xFF) {
                 val = 0;
         } else if (b1 > 127) { // check flag for integer
-                if(b2 == 0xFF){
-                val = (b1 - 128)*100;
-              }else{
-                val = (b1 - 128)*100 + b2;
-              }
+                if(b2 == 0xFF) {
+                        val = (b1 - 128)*100;
+                }else{
+                        val = (b1 - 128)*100 + b2;
+                }
                 // Serial.print("integer value decoded as: ");
                 // Serial.println(val);
         } else{ //value is a float
                 // THere is a permanent rounding down error in this of -0.01. +0.01 to compensate.
-                if(b2 == 0xFF){
-                  val = b1;
-              }else{
-                val = b1 + ((float)b2+1)/100;
-              }
+                if(b2 == 0xFF) {
+                        val = b1;
+                }else{
+                        val = b1 + ((float)b2+1)/100;
+                }
                 // Serial.print("Float value decoded as: ");
                 // Serial.println(val);
         }
